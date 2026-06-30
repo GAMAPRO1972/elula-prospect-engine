@@ -1,0 +1,13 @@
+{
+    "country": "South Africa",
+    "phone_country_code": "+27",
+    "default_source": "Google Maps",
+    "default_status": "New",
+    "default_primary_product": "Elula BizHub",
+    "remove_duplicates": true,
+    "clean_phone_numbers": true,
+    "clean_websites": true,
+    "validate_emails": true,
+    "create_processing_report": true,
+    "output_filename": "ElulaBizHub_Import.csv"
+}
