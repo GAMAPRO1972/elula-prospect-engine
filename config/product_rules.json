@@ -1,0 +1,33 @@
+{
+    "Security": {
+        "owner": "Gary",
+        "primary_product": "Elula BizHub",
+        "secondary_products": [
+            "Elula Mobile",
+            "Red XRay"
+        ]
+    },
+    "Construction": {
+        "owner": "Rob",
+        "primary_product": "Elula Compliance",
+        "secondary_products": [
+            "Elula Skills",
+            "Red XRay"
+        ]
+    },
+    "Manufacturing": {
+        "owner": "Rob",
+        "primary_product": "Elula Skills",
+        "secondary_products": [
+            "Elula Compliance",
+            "Red XRay"
+        ]
+    },
+    "Default": {
+        "owner": "Gary",
+        "primary_product": "Elula BizHub",
+        "secondary_products": [
+            "Red XRay"
+        ]
+    }
+}

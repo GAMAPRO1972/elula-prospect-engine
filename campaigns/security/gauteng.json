@@ -1,0 +1,15 @@
+{
+  "campaign_id": "SEC-GP-001",
+  "campaign_name": "Security Gauteng",
+  "industry": "Security",
+  "province": "Gauteng",
+  "country": "South Africa",
+  "source": "Google Maps",
+  "primary_product": "Elula BizHub",
+  "secondary_products": [
+    "Red XRay",
+    "Elula Mobile"
+  ],
+  "pipeline": "Security Prospecting",
+  "active": true
+}
