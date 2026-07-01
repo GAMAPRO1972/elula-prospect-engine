@@ -10,9 +10,13 @@ import csv
 
 from modules.assignment_engine import assign_lead
 from modules.opportunity_scoring import calculate_score
+from modules.cleaner import clean_row
 
 
 def build_prospect(row, campaign):
+    """
+    Convert a cleaned CSV row into an Elula prospect.
+    """
 
     assignment = assign_lead(campaign)
 
@@ -41,6 +45,9 @@ def build_prospect(row, campaign):
 
 
 def process_csv(input_file: Path, output_file: Path, campaign):
+    """
+    Process a raw Google Maps CSV into an Elula BizHub import file.
+    """
 
     prospects = []
 
@@ -49,9 +56,15 @@ def process_csv(input_file: Path, output_file: Path, campaign):
         reader = csv.DictReader(csvfile)
 
         for row in reader:
-            prospects.append(
-                build_prospect(row, campaign)
+
+            row = clean_row(row)
+
+            prospect = build_prospect(
+                row,
+                campaign
             )
+
+            prospects.append(prospect)
 
     fieldnames = [
         "company_name",
@@ -88,7 +101,6 @@ def process_csv(input_file: Path, output_file: Path, campaign):
 
         writer.writeheader()
 
-        for prospect in prospects:
-            writer.writerow(prospect)
+        writer.writerows(prospects)
 
     return len(prospects)
