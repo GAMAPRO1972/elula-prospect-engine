@@ -11,5 +11,6 @@
     "Elula Mobile"
   ],
   "pipeline": "Security Prospecting",
+  "sync_to_ghl": true,
   "active": true
 }

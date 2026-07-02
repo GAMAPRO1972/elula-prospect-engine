@@ -1,0 +1,322 @@
+"""
+modules/ghl_sync.py
+
+Orchestrates GoHighLevel synchronisation for processed prospects.
+"""
+
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+from config.settings import settings
+from integrations.ghl.api import GHLAPIError, ghl
+from integrations.ghl.importer import importer
+from integrations.ghl.logger import logger
+from integrations.ghl.opportunities import opportunities
+from integrations.ghl.tasks import GHLTasks
+
+
+GHL_DIR = Path(__file__).resolve().parent.parent / "integrations" / "ghl"
+
+
+@dataclass
+class SyncSummary:
+    contacts_created: int = 0
+    contacts_updated: int = 0
+    opportunities_created: int = 0
+    tasks_created: int = 0
+    failures: int = 0
+
+    def as_dict(self) -> dict[str, int]:
+        return {
+            "contacts_created": self.contacts_created,
+            "contacts_updated": self.contacts_updated,
+            "opportunities_created": self.opportunities_created,
+            "tasks_created": self.tasks_created,
+            "failures": self.failures,
+        }
+
+
+def _load_metadata(filename: str) -> Any:
+    path = GHL_DIR / filename
+
+    if not path.exists() or path.stat().st_size == 0:
+        return {}
+
+    with path.open("r", encoding="utf-8") as file:
+        return json.load(file)
+
+
+def _normalise(value: Any) -> str:
+    return str(value or "").strip().lower()
+
+
+def _iter_records(data: Any) -> list[dict[str, Any]]:
+    if isinstance(data, list):
+        return [item for item in data if isinstance(item, dict)]
+
+    if isinstance(data, dict):
+        records = []
+        for key, value in data.items():
+            if isinstance(value, dict):
+                record = dict(value)
+                record.setdefault("name", key)
+                records.append(record)
+        return records
+
+    return []
+
+
+def _resolve_by_name(data: Any, name: str, label: str) -> dict[str, Any]:
+    for record in _iter_records(data):
+        names = [
+            record.get("name"),
+            record.get("label"),
+            record.get("display_name"),
+            record.get("displayName"),
+        ]
+
+        if _normalise(name) in {_normalise(item) for item in names}:
+            return record
+
+    raise ValueError(f"GHL {label} metadata not found for '{name}'.")
+
+
+def _owner_match_values(record: dict[str, Any]) -> set[str]:
+    values = {
+        record.get("name"),
+        record.get("full_name"),
+        record.get("fullName"),
+        record.get("email"),
+        record.get("label"),
+        record.get("display_name"),
+        record.get("displayName"),
+    }
+
+    first_name = record.get("first_name") or record.get("firstName")
+    if first_name:
+        values.add(first_name)
+
+    return {_normalise(value) for value in values if _normalise(value)}
+
+
+def _owner_display_name(record: dict[str, Any]) -> str:
+    return (
+        record.get("name")
+        or record.get("full_name")
+        or record.get("fullName")
+        or record.get("email")
+        or "Unnamed owner"
+    )
+
+
+def _resolve_owner(data: Any, owner_name: str) -> dict[str, Any]:
+    records = _iter_records(data)
+    requested = _normalise(owner_name)
+
+    for record in records:
+        if requested in _owner_match_values(record):
+            return record
+
+    available = sorted(
+        {
+            _owner_display_name(record)
+            for record in records
+            if _owner_display_name(record)
+        }
+    )
+    available_text = ", ".join(available) if available else "none"
+
+    raise ValueError(
+        f"GHL owner metadata not found for '{owner_name}'. "
+        f"Available owners: {available_text}."
+    )
+
+
+def _resolve_stage(stages_data: Any, pipeline_id: str, campaign) -> dict[str, Any]:
+    stage_name = (
+        campaign.config.get("stage")
+        or campaign.config.get("pipeline_stage")
+        or campaign.config.get("opportunity_stage")
+    )
+
+    if stage_name:
+        return _resolve_by_name(stages_data, stage_name, "stage")
+
+    for record in _iter_records(stages_data):
+        is_default = bool(record.get("default") or record.get("is_default"))
+        same_pipeline = record.get("pipeline_id") == pipeline_id or record.get("pipelineId") == pipeline_id
+
+        if is_default and (same_pipeline or not record.get("pipeline_id") and not record.get("pipelineId")):
+            return record
+
+    pipeline_stages = [
+        record
+        for record in _iter_records(stages_data)
+        if record.get("pipeline_id") == pipeline_id or record.get("pipelineId") == pipeline_id
+    ]
+
+    if pipeline_stages:
+        return sorted(
+            pipeline_stages,
+            key=lambda record: record.get("position") if isinstance(record.get("position"), int) else 0,
+        )[0]
+
+    raise ValueError("GHL stage metadata not found. Add a campaign stage or default stage.")
+
+
+def _record_id(record: dict[str, Any], label: str) -> str:
+    record_id = record.get("id") or record.get(f"{label}_id") or record.get(f"{label}Id")
+
+    if not record_id:
+        raise ValueError(f"GHL {label} metadata is missing an id.")
+
+    return record_id
+
+
+def _extract_contact_id(response: dict[str, Any]) -> str:
+    if "id" in response:
+        return response["id"]
+
+    contact = response.get("contact")
+    if isinstance(contact, dict) and contact.get("id"):
+        return contact["id"]
+
+    raise ValueError("GHL contact response did not include a contact id.")
+
+
+def _extract_opportunity_id(response: dict[str, Any]) -> str:
+    if "id" in response:
+        return response["id"]
+
+    opportunity = response.get("opportunity")
+    if isinstance(opportunity, dict) and opportunity.get("id"):
+        return opportunity["id"]
+
+    raise ValueError("GHL opportunity response did not include an opportunity id.")
+
+
+def _resolve_tags(tags_data: Any, campaign) -> list[str]:
+    tag_names = campaign.config.get("tags", [])
+
+    if isinstance(tag_names, str):
+        tag_names = [tag_names]
+
+    tag_ids = []
+    for tag_name in tag_names:
+        record = _resolve_by_name(tags_data, tag_name, "tag")
+        tag_ids.append(_record_id(record, "tag"))
+
+    return tag_ids
+
+
+def _build_contact_payload(prospect: dict[str, Any], owner_id: str, tag_ids: list[str], campaign) -> dict[str, Any]:
+    payload = {
+        "locationId": settings.ghl_location_id,
+        "companyName": prospect.get("company_name", ""),
+        "email": prospect.get("email", ""),
+        "phone": prospect.get("phone", ""),
+        "address1": prospect.get("address", ""),
+        "source": campaign.config.get("source", settings.default_source),
+        "assignedTo": owner_id,
+    }
+
+    if prospect.get("website"):
+        payload["website"] = prospect["website"]
+
+    if tag_ids:
+        payload["tags"] = tag_ids
+
+    return {key: value for key, value in payload.items() if value not in ("", None)}
+
+
+def _opportunity_name(prospect: dict[str, Any]) -> str:
+    company = prospect.get("company_name") or "Unknown Company"
+    product = prospect.get("primary_product") or settings.default_primary_product
+    return f"{company} - {product}"
+
+
+def _sync_single_prospect(
+    prospect: dict[str, Any],
+    campaign,
+    metadata: dict[str, Any],
+    task_service: GHLTasks,
+    summary: SyncSummary,
+) -> None:
+    pipeline = _resolve_by_name(metadata["pipelines"], campaign.config.get("pipeline"), "pipeline")
+    pipeline_id = _record_id(pipeline, "pipeline")
+
+    stage = _resolve_stage(metadata["stages"], pipeline_id, campaign)
+    stage_id = _record_id(stage, "stage")
+
+    owner = _resolve_owner(metadata["owners"], prospect.get("owner"))
+    owner_id = _record_id(owner, "owner")
+
+    tag_ids = _resolve_tags(metadata["tags"], campaign)
+
+    contact_payload = _build_contact_payload(prospect, owner_id, tag_ids, campaign)
+    existing_contact = importer.find_contact(
+        email=contact_payload.get("email"),
+        phone=contact_payload.get("phone"),
+    )
+
+    contact_response = importer.sync_contact(contact_payload)
+    contact_id = existing_contact["id"] if existing_contact else _extract_contact_id(contact_response)
+
+    if existing_contact:
+        summary.contacts_updated += 1
+    else:
+        summary.contacts_created += 1
+
+    opportunity_response = opportunities.create_opportunity(
+        contact_id=contact_id,
+        pipeline_id=pipeline_id,
+        stage_id=stage_id,
+        owner_id=owner_id,
+        name=_opportunity_name(prospect),
+    )
+    _extract_opportunity_id(opportunity_response)
+    summary.opportunities_created += 1
+
+    task_service.create_initial_call(
+        contact_id=contact_id,
+        owner_id=owner_id,
+    )
+    summary.tasks_created += 1
+
+
+def sync_prospects(prospects: list[dict[str, Any]], campaign) -> dict[str, int]:
+    """
+    Synchronise processed prospects with GoHighLevel.
+    """
+
+    summary = SyncSummary()
+    task_service = GHLTasks(ghl)
+    metadata = {
+        "pipelines": _load_metadata("pipelines.json"),
+        "stages": _load_metadata("stages.json"),
+        "owners": _load_metadata("owners.json"),
+        "tags": _load_metadata("tags.json"),
+    }
+
+    for prospect in prospects:
+        try:
+            _sync_single_prospect(
+                prospect=prospect,
+                campaign=campaign,
+                metadata=metadata,
+                task_service=task_service,
+                summary=summary,
+            )
+        except (GHLAPIError, ValueError, KeyError) as exc:
+            summary.failures += 1
+            logger.exception(
+                "Failed to synchronise prospect '%s': %s",
+                prospect.get("company_name", "Unknown"),
+                exc,
+            )
+
+    return summary.as_dict()

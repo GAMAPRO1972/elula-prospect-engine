@@ -31,3 +31,8 @@ Thumbs.db
 # Python cache
 *.egg-info/
 .pytest_cache/
+
+archive/*.csv
+input/*.csv
+output/*.csv
+.env
