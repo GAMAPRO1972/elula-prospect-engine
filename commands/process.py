@@ -7,11 +7,8 @@ Runs the Lead Processing Engine.
 from pathlib import Path
 
 from modules.campaign_manager import load_campaign
+from modules.file_manager import archive_file, find_csv_files
 from modules.process_leads import export_prospects, prepare_prospects, process_csv
-from modules.file_manager import (
-    find_csv_files,
-    archive_file,
-)
 
 
 def _print_ghl_sync_section(
@@ -26,35 +23,41 @@ def _print_ghl_sync_section(
         "contacts_updated": 0,
         "opportunities_created": 0,
         "tasks_created": 0,
+        "imported": 0,
+        "skipped": 0,
+        "people_checked": 0,
+        "people_found": 0,
         "failures": 0,
     }
 
     print()
     print("=" * 60)
-    print("GHL SYNCHRONIZATION")
+    print("ELULA BIZHUB SYNCHRONIZATION")
     print("=" * 60)
     print(f"Sync Enabled         : {'Yes' if enabled else 'No'}")
     print(f"Total Prospects      : {total_processed}")
     print(f"Limit Applied        : {limit if limit is not None else 'None'}")
-    print(f"Prospects Synced     : {prospects_synced}")
-    print(f"Contacts Created     : {summary['contacts_created']}")
-    print(f"Contacts Updated     : {summary['contacts_updated']}")
-    print(f"Opportunities Created: {summary['opportunities_created']}")
-    print(f"Tasks Created        : {summary['tasks_created']}")
-    print(f"Failures             : {summary['failures']}")
+    print(f"Prospects Checked    : {prospects_synced}")
+    print(f"People Checked       : {summary.get('people_checked', 0)}")
+    print(f"People Found         : {summary.get('people_found', 0)}")
+    print(f"Imported             : {summary.get('imported', 0)}")
+    print(f"Skipped              : {summary.get('skipped', 0)}")
+    print(f"Contacts Created     : {summary.get('contacts_created', 0)}")
+    print(f"Contacts Updated     : {summary.get('contacts_updated', 0)}")
+    print(f"Opportunities Created: {summary.get('opportunities_created', 0)}")
+    print(f"Tasks Created        : {summary.get('tasks_created', 0)}")
+    print(f"Failures             : {summary.get('failures', 0)}")
 
 
 def run(industry, campaign, sync_to_ghl=False, limit=None):
     if limit is not None and limit < 1:
         raise ValueError("--limit must be greater than zero.")
 
-    # Load the campaign definition
     campaign_obj = load_campaign(
         industry,
-        campaign
+        campaign,
     )
 
-    # Find all CSV files waiting to be processed
     csv_files = find_csv_files()
 
     if not csv_files:
@@ -63,12 +66,10 @@ def run(industry, campaign, sync_to_ghl=False, limit=None):
 
     total_processed = 0
 
-    # Process each CSV file
     for csv_file in csv_files:
-
         output_file = (
-            Path("output") /
-            f"{csv_file.stem}_processed.csv"
+            Path("output")
+            / f"{csv_file.stem}_processed.csv"
         )
 
         if sync_to_ghl:
@@ -76,7 +77,7 @@ def run(industry, campaign, sync_to_ghl=False, limit=None):
 
             prospects = prepare_prospects(
                 csv_file,
-                campaign_obj
+                campaign_obj,
             )
 
             sync_prospect_list = prospects
@@ -85,7 +86,7 @@ def run(industry, campaign, sync_to_ghl=False, limit=None):
 
             summary = sync_prospects(
                 sync_prospect_list,
-                campaign_obj
+                campaign_obj,
             )
 
             _print_ghl_sync_section(
@@ -98,7 +99,7 @@ def run(industry, campaign, sync_to_ghl=False, limit=None):
 
             export_prospects(
                 prospects,
-                output_file
+                output_file,
             )
 
             processed = len(prospects)
@@ -107,7 +108,7 @@ def run(industry, campaign, sync_to_ghl=False, limit=None):
             processed = process_csv(
                 csv_file,
                 output_file,
-                campaign_obj
+                campaign_obj,
             )
 
             _print_ghl_sync_section(
@@ -121,7 +122,7 @@ def run(industry, campaign, sync_to_ghl=False, limit=None):
 
         total_processed += processed
 
-        print(f"✓ Processed: {csv_file.name}")
+        print(f"Processed: {csv_file.name}")
 
     print()
     print("=" * 60)

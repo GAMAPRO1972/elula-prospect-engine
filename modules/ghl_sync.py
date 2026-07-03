@@ -1,7 +1,7 @@
 """
 modules/ghl_sync.py
 
-Orchestrates GoHighLevel synchronisation for processed prospects.
+Orchestrates Elula BizHub synchronisation for processed prospects.
 """
 
 from __future__ import annotations
@@ -17,6 +17,13 @@ from integrations.ghl.importer import importer
 from integrations.ghl.logger import logger
 from integrations.ghl.opportunities import opportunities
 from integrations.ghl.tasks import GHLTasks
+from integrations.people.service import PeopleEnrichmentService
+from modules.import_history import (
+    build_match_key,
+    find_import,
+    load_import_history,
+    record_import,
+)
 
 
 GHL_DIR = Path(__file__).resolve().parent.parent / "integrations" / "ghl"
@@ -28,6 +35,10 @@ class SyncSummary:
     contacts_updated: int = 0
     opportunities_created: int = 0
     tasks_created: int = 0
+    imported: int = 0
+    skipped: int = 0
+    people_checked: int = 0
+    people_found: int = 0
     failures: int = 0
 
     def as_dict(self) -> dict[str, int]:
@@ -36,6 +47,10 @@ class SyncSummary:
             "contacts_updated": self.contacts_updated,
             "opportunities_created": self.opportunities_created,
             "tasks_created": self.tasks_created,
+            "imported": self.imported,
+            "skipped": self.skipped,
+            "people_checked": self.people_checked,
+            "people_found": self.people_found,
             "failures": self.failures,
         }
 
@@ -148,21 +163,33 @@ def _resolve_stage(stages_data: Any, pipeline_id: str, campaign) -> dict[str, An
 
     for record in _iter_records(stages_data):
         is_default = bool(record.get("default") or record.get("is_default"))
-        same_pipeline = record.get("pipeline_id") == pipeline_id or record.get("pipelineId") == pipeline_id
+        same_pipeline = (
+            record.get("pipeline_id") == pipeline_id
+            or record.get("pipelineId") == pipeline_id
+        )
 
-        if is_default and (same_pipeline or not record.get("pipeline_id") and not record.get("pipelineId")):
+        if is_default and (
+            same_pipeline
+            or not record.get("pipeline_id")
+            and not record.get("pipelineId")
+        ):
             return record
 
     pipeline_stages = [
         record
         for record in _iter_records(stages_data)
-        if record.get("pipeline_id") == pipeline_id or record.get("pipelineId") == pipeline_id
+        if record.get("pipeline_id") == pipeline_id
+        or record.get("pipelineId") == pipeline_id
     ]
 
     if pipeline_stages:
         return sorted(
             pipeline_stages,
-            key=lambda record: record.get("position") if isinstance(record.get("position"), int) else 0,
+            key=lambda record: (
+                record.get("position")
+                if isinstance(record.get("position"), int)
+                else 0
+            ),
         )[0]
 
     raise ValueError("GHL stage metadata not found. Add a campaign stage or default stage.")
@@ -199,6 +226,20 @@ def _extract_opportunity_id(response: dict[str, Any]) -> str:
     raise ValueError("GHL opportunity response did not include an opportunity id.")
 
 
+def _extract_task_id(response: dict[str, Any]) -> str | None:
+    if not isinstance(response, dict):
+        return None
+
+    if response.get("id"):
+        return response["id"]
+
+    task = response.get("task")
+    if isinstance(task, dict) and task.get("id"):
+        return task["id"]
+
+    return None
+
+
 def _resolve_tags(tags_data: Any, campaign) -> list[str]:
     tag_names = campaign.config.get("tags", [])
 
@@ -213,7 +254,12 @@ def _resolve_tags(tags_data: Any, campaign) -> list[str]:
     return tag_ids
 
 
-def _build_contact_payload(prospect: dict[str, Any], owner_id: str, tag_ids: list[str], campaign) -> dict[str, Any]:
+def _build_contact_payload(
+    prospect: dict[str, Any],
+    owner_id: str,
+    tag_ids: list[str],
+    campaign,
+) -> dict[str, Any]:
     payload = {
         "locationId": settings.ghl_location_id,
         "companyName": prospect.get("company_name", ""),
@@ -239,13 +285,31 @@ def _opportunity_name(prospect: dict[str, Any]) -> str:
     return f"{company} - {product}"
 
 
+def _check_people(
+    prospect: dict[str, Any],
+    service: PeopleEnrichmentService,
+    summary: SyncSummary,
+) -> None:
+    people = service.enrich_prospect(prospect)
+    people_found = len(people)
+
+    summary.people_checked += 1
+    summary.people_found += people_found
+
+    logger.info(
+        "People enrichment checked for prospect '%s'. people_found=%s.",
+        prospect.get("company_name", "Unknown"),
+        people_found,
+    )
+
+
 def _sync_single_prospect(
     prospect: dict[str, Any],
     campaign,
     metadata: dict[str, Any],
     task_service: GHLTasks,
     summary: SyncSummary,
-) -> None:
+) -> dict[str, str | None]:
     pipeline = _resolve_by_name(metadata["pipelines"], campaign.config.get("pipeline"), "pipeline")
     pipeline_id = _record_id(pipeline, "pipeline")
 
@@ -278,23 +342,32 @@ def _sync_single_prospect(
         owner_id=owner_id,
         name=_opportunity_name(prospect),
     )
-    _extract_opportunity_id(opportunity_response)
+    opportunity_id = _extract_opportunity_id(opportunity_response)
     summary.opportunities_created += 1
 
-    task_service.create_initial_call(
+    task_response = task_service.create_initial_call(
         contact_id=contact_id,
         owner_id=owner_id,
     )
+    task_id = _extract_task_id(task_response)
     summary.tasks_created += 1
+
+    return {
+        "contact_id": contact_id,
+        "opportunity_id": opportunity_id,
+        "task_id": task_id,
+    }
 
 
 def sync_prospects(prospects: list[dict[str, Any]], campaign) -> dict[str, int]:
     """
-    Synchronise processed prospects with GoHighLevel.
+    Synchronise processed prospects with Elula BizHub.
     """
 
     summary = SyncSummary()
     task_service = GHLTasks(ghl)
+    people_service = PeopleEnrichmentService()
+    import_history = load_import_history()
     metadata = {
         "pipelines": _load_metadata("pipelines.json"),
         "stages": _load_metadata("stages.json"),
@@ -303,19 +376,66 @@ def sync_prospects(prospects: list[dict[str, Any]], campaign) -> dict[str, int]:
     }
 
     for prospect in prospects:
+        company_name = prospect.get("company_name", "Unknown")
+
         try:
-            _sync_single_prospect(
+            _check_people(
+                prospect=prospect,
+                service=people_service,
+                summary=summary,
+            )
+
+            match_type, match_value, match_key = build_match_key(prospect)
+            existing_import = find_import(import_history, match_key)
+
+            if existing_import:
+                summary.skipped += 1
+                logger.info(
+                    "Skipped previously imported prospect '%s' using %s match '%s'. "
+                    "Original contact: %s, opportunity: %s.",
+                    company_name,
+                    match_type,
+                    match_value,
+                    existing_import.get("contact_id", ""),
+                    existing_import.get("opportunity_id", ""),
+                )
+                continue
+
+            sync_result = _sync_single_prospect(
                 prospect=prospect,
                 campaign=campaign,
                 metadata=metadata,
                 task_service=task_service,
                 summary=summary,
             )
-        except (GHLAPIError, ValueError, KeyError) as exc:
+
+            record_import(
+                ledger=import_history,
+                prospect=prospect,
+                campaign=campaign,
+                match_type=match_type,
+                match_value=match_value,
+                match_key=match_key,
+                contact_id=sync_result["contact_id"] or "",
+                opportunity_id=sync_result["opportunity_id"] or "",
+                task_id=sync_result["task_id"],
+            )
+            summary.imported += 1
+
+            logger.info(
+                "Imported prospect '%s' using %s match '%s'. Contact: %s, opportunity: %s.",
+                company_name,
+                match_type,
+                match_value,
+                sync_result["contact_id"],
+                sync_result["opportunity_id"],
+            )
+
+        except (GHLAPIError, ValueError, KeyError, json.JSONDecodeError) as exc:
             summary.failures += 1
             logger.exception(
                 "Failed to synchronise prospect '%s': %s",
-                prospect.get("company_name", "Unknown"),
+                company_name,
                 exc,
             )
 
