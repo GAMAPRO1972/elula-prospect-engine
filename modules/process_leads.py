@@ -8,9 +8,9 @@ Elula BizHub import files.
 from pathlib import Path
 import csv
 
+from modules.assignment_engine import assign_lead
 from modules.cleaner import clean_row
 from modules.deduplicator import deduplicate
-from modules.assignment_engine import assign_lead
 from modules.opportunity_scoring import calculate_score
 
 
@@ -26,9 +26,19 @@ FIELDNAMES = [
     "secondary_products",
     "review_rating",
     "review_count",
+    "opening_hours",
+    "business_status",
     "opportunity_score",
     "opportunity_reasons",
 ]
+
+
+def _first_value(row, keys):
+    for key in keys:
+        value = row.get(key, "")
+        if value:
+            return value.strip()
+    return ""
 
 
 def build_prospect(row, campaign):
@@ -47,6 +57,14 @@ def build_prospect(row, campaign):
         "category": row.get("category", "").strip(),
         "review_rating": row.get("review_rating", "").strip(),
         "review_count": row.get("review_count", "").strip(),
+        "opening_hours": _first_value(
+            row,
+            ["opening_hours", "open_hours", "hours", "working_hours", "business_hours"],
+        ),
+        "business_status": _first_value(
+            row,
+            ["business_status", "status", "place_status"],
+        ),
         "owner": assignment["owner"],
         "primary_product": assignment["primary_product"],
         "secondary_products": ", ".join(

@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.5.0
+
+Status: implemented locally, pending release commit and tag.
+
+Released scope:
+
+- Added Google Business Profile Intelligence foundation.
+- Added local parser and client boundary for Google Business Profile-like data.
+- Added Business Intelligence module.
+- Added Sales Opportunity Engine.
+- Added internal CSV and XLSX intelligence reports.
+- Added branded Elula Business Growth Assessment PDF reports.
+- Added `--intelligence` CLI option for report generation.
+- Preserved dry-run and no-live-sync safety rules.
+- Clarified execute workflow reporting so scraper failure is not reported as full workflow success.
+- Removed stale duplicate execute command file.
+- Documented that dry-run prevents Elula BizHub and import-history writes but may still create local processing outputs and archives.
+
+Operational impact:
+
+- Operators can generate report-only sales intelligence without writing Google Business intelligence to Elula BizHub.
+- Reports identify conservative sales opportunities based on available public information.
+
 ## v0.4.0
 
 Status: released. Sprint 4 is complete.

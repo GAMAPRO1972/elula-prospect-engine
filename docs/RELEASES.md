@@ -1,5 +1,41 @@
 # Releases
 
+## v0.5.0 Release Notes
+
+`v0.5.0` is the Google Business Profile Intelligence and Elula Business Growth Assessment release.
+
+Status: implemented locally, pending release commit and tag.
+
+### Highlights
+
+- Google Business Profile Intelligence foundation.
+- Business Intelligence module.
+- Sales Opportunity Engine.
+- Internal CSV and XLSX reports.
+- Branded Elula Business Growth Assessment PDF reports.
+- Safe `--intelligence` CLI option.
+
+### Business Value
+
+This release turns available Google Maps and profile-like data into practical sales intelligence. It helps identify conservative improvement opportunities such as missing websites, low review count, missing phone details, incomplete profiles, and weak digital presence.
+
+### Engineering Notes
+
+- No paid Google APIs are called.
+- Google Business intelligence is report-only.
+- No Google Business intelligence is written to Elula BizHub.
+- Existing dry-run and `--limit` behavior is preserved.
+
+### Validation
+
+Required:
+
+```powershell
+.venv\Scripts\python.exe -m compileall commands config integrations modules tools
+.venv\Scripts\python.exe main.py execute --limit 3 --dry-run
+.venv\Scripts\python.exe main.py execute --limit 3 --intelligence --dry-run
+```
+
 ## v0.4.0 Release Notes
 
 `v0.4.0` is the production-safety and intelligence-foundation release.

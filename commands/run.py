@@ -18,3 +18,5 @@ def run(industry, campaign):
         print("\nScraper completed successfully.")
     else:
         print("\nScraper failed.")
+
+    return success

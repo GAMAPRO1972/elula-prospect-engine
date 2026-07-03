@@ -79,6 +79,12 @@ For workflow validation, prefer:
 .venv\Scripts\python.exe main.py execute --limit 3 --dry-run
 ```
 
+For intelligence report validation, use:
+
+```powershell
+.venv\Scripts\python.exe main.py execute --limit 3 --intelligence --dry-run
+```
+
 Only run limited live sync when explicitly approved:
 
 ```powershell
@@ -144,6 +150,7 @@ A sprint is not complete until:
 - Do not bypass import history.
 - Do not add external APIs without an approved provider design.
 - Do not write new intelligence into Elula BizHub without approved mapping.
+- Do not write Google Business Profile intelligence into Elula BizHub until explicitly approved.
 - Keep modules loosely coupled.
 - Prefer provider interfaces for future integrations.
 
@@ -153,6 +160,7 @@ A sprint is not complete until:
 - Dry-run must not create opportunities.
 - Dry-run must not create tasks.
 - Dry-run must not write import history.
+- Dry-run may still create local reports, output files, and archive processed input CSV files.
 - Dry-run should show what would have happened.
 - Dry-run should be used before any live sync test.
 

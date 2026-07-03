@@ -1,11 +1,11 @@
 # Project Context
 
 ```text
-Current Version: v0.4.0
+Current Version: v0.5.0
 Status: Production Beta
 Last Updated: 2026-07-03
 Repository: https://github.com/GAMAPRO1972/elula-prospect-engine
-Next Objective: Sprint 5 - Google Business Profile Intelligence
+Next Objective: Sprint 6 - Decision Maker Discovery
 ```
 
 This is the first document to read for all future developers, AI assistants, sprint handoffs, and project onboarding. It is the authoritative context document for the Elula Prospect Engine.
@@ -26,15 +26,15 @@ Manual prospecting is slow, inconsistent, difficult to measure, and prone to dup
 
 Current version:
 
-`v0.4.0`
+`v0.5.0`
 
 Current project status:
 
-The `v0.4.0` application code is complete. It includes production-safety foundations: dry-run mode, safe `--limit` testing, persistent import history, cross-run duplicate prevention, people enrichment foundation, and website intelligence foundation.
+The `v0.5.0` application code adds Google Business Profile Intelligence and Elula Business Growth Assessment reporting. Intelligence is report-only and is not written into Elula BizHub.
 
 Immediate next task:
 
-Prepare `v0.5.0`: Google Business Profile Intelligence. The next implementation should add safe profile intelligence without changing existing live sync behavior until mapping and operational rules are approved.
+Prepare `v0.6.0`: Decision Maker Discovery. The next implementation should expand people enrichment safely without changing existing live sync behavior until provider selection, mapping, and operating rules are approved.
 
 ## Business Objective
 
@@ -70,7 +70,7 @@ Processing
 Intelligence
   - people enrichment foundation
   - website intelligence foundation
-  - future Google Business Profile Intelligence
+  - Google Business Profile Intelligence
         |
         v
 Elula BizHub
@@ -96,6 +96,7 @@ docs/                 Permanent engineering documentation.
 integrations/ghl/     Elula BizHub API integration and metadata.
 integrations/people/  People enrichment provider foundation.
 integrations/website/ Website intelligence analysis foundation.
+integrations/google_business/ Google Business Profile intelligence foundation.
 modules/              Core processing, sync, enrichment, and utility logic.
 tools/                Operational scripts and support utilities.
 input/                Incoming CSV files waiting for processing.
@@ -125,8 +126,12 @@ templates/            Reusable templates.
 - `integrations/ghl/*`: handles Elula BizHub API operations.
 - `integrations/people/*`: provides the people enrichment foundation.
 - `integrations/website/*`: provides the website intelligence foundation.
+- `integrations/google_business/*`: parses local Google Business Profile-like data.
+- `modules/google_business_intelligence.py`: generates internal intelligence reports.
+- `modules/sales_opportunity_engine.py`: translates intelligence into conservative sales opportunities.
+- `modules/client_report_generator.py`: generates Elula Business Growth Assessment PDFs.
 
-## Implemented in v0.4.0
+## Implemented in v0.5.0
 
 - Google Maps campaign scraper.
 - Campaign manager.
@@ -145,6 +150,10 @@ templates/            Reusable templates.
 - Website intelligence framework.
 - Dry-run mode.
 - Safe `--limit` testing.
+- Google Business Profile Intelligence foundation.
+- Business intelligence CSV and XLSX reports.
+- Elula Business Growth Assessment PDF reports.
+- Sales Opportunity Engine.
 
 ## Development Workflow
 
@@ -169,6 +178,14 @@ Safe workflow validation:
 
 ```powershell
 .venv\Scripts\python.exe main.py execute --limit 3 --dry-run
+```
+
+Dry-run prevents Elula BizHub writes and import-history writes. It may still create local reports, output files, and archive processed input CSV files during processing.
+
+Safe intelligence validation:
+
+```powershell
+.venv\Scripts\python.exe main.py execute --limit 3 --intelligence --dry-run
 ```
 
 Limited live validation, only when approved:
@@ -206,6 +223,7 @@ When explicitly instructed:
 - `v0.2 Processing`: cleaning, deduplication, scoring, product assignment, and owner assignment.
 - `v0.3 Elula BizHub Integration`: metadata refresh, contact upsert, opportunity creation, task creation, and safe `--limit` testing.
 - `v0.4 Production Platform`: import history, cross-run duplicate prevention, people enrichment foundation, website intelligence foundation, dry-run mode, and engineering documentation.
+- `v0.5 Google Business Profile Intelligence`: local profile intelligence, conservative sales opportunity findings, internal reports, and Elula Business Growth Assessment PDFs.
 
 ## Business Rules
 
@@ -213,9 +231,11 @@ When explicitly instructed:
 - Elula BizHub is the central CRM and operations platform.
 - Duplicate prevention is mandatory before live CRM writes.
 - Dry-run validation must precede live sync validation.
+- Dry-run is not a full filesystem no-op; it protects Elula BizHub and import history, but local processing outputs and archives may still be created.
 - Live sync must use `--limit` before scale.
 - People and website intelligence must not write to Elula BizHub until mapping and operating rules are approved.
+- Google Business Profile intelligence must remain report-only until Elula BizHub field mapping is explicitly approved.
 
 ## Future Vision
 
-The Prospect Engine should become the discovery and intelligence source for a broader Elula Business Dynamics platform. Future releases should add Google Business Profile Intelligence, decision-maker discovery, AI call preparation, AI outreach, reporting dashboards, and sales intelligence workflows that connect prospect quality to booked appointments.
+The Prospect Engine should become the discovery and intelligence source for a broader Elula Business Dynamics platform. Future releases should add decision-maker discovery, AI call preparation, AI outreach, reporting dashboards, and sales intelligence workflows that connect prospect quality to booked appointments.

@@ -68,11 +68,9 @@ Outcome:
 
 - the system can be validated safely and extended toward richer sales intelligence.
 
-## Planned Releases
-
 ### v0.5 - Google Business Profile Intelligence
 
-Status: planned.
+Status: implemented locally, pending release commit and tag.
 
 Objective:
 
@@ -93,6 +91,10 @@ Expected scope:
 - category alignment;
 - profile quality indicators;
 - sales findings and recommendations.
+- internal CSV and XLSX reports;
+- Elula Business Growth Assessment PDFs.
+
+## Planned Releases
 
 ### v0.6 - Decision Maker Discovery
 

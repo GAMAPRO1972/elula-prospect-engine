@@ -71,7 +71,28 @@ def _print_ghl_sync_section(
     print(f"Failures             : {summary.get('failures', 0)}")
 
 
-def run(industry, campaign, sync_to_ghl=False, limit=None, dry_run=False):
+def _limited(prospects, limit):
+    if limit is None:
+        return prospects
+    return prospects[:limit]
+
+
+def _generate_intelligence_reports(prospects):
+    from modules.google_business_intelligence import generate_business_intelligence_reports
+
+    summary = generate_business_intelligence_reports(prospects)
+
+    print()
+    print("=" * 60)
+    print("GOOGLE BUSINESS INTELLIGENCE")
+    print("=" * 60)
+    print(f"Records Analysed     : {summary['records']}")
+    print(f"CSV Report           : {summary['csv_report']}")
+    print(f"Excel Report         : {summary['xlsx_report']}")
+    print(f"Client Reports       : {len(summary['client_reports'])}")
+
+
+def run(industry, campaign, sync_to_ghl=False, limit=None, dry_run=False, intelligence=False):
     if limit is not None and limit < 1:
         raise ValueError("--limit must be greater than zero.")
 
@@ -102,9 +123,10 @@ def run(industry, campaign, sync_to_ghl=False, limit=None, dry_run=False):
                 campaign_obj,
             )
 
-            sync_prospect_list = prospects
-            if limit is not None:
-                sync_prospect_list = prospects[:limit]
+            sync_prospect_list = _limited(prospects, limit)
+
+            if intelligence:
+                _generate_intelligence_reports(sync_prospect_list)
 
             summary = sync_prospects(
                 sync_prospect_list,
@@ -124,6 +146,30 @@ def run(industry, campaign, sync_to_ghl=False, limit=None, dry_run=False):
             export_prospects(
                 prospects,
                 output_file,
+            )
+
+            processed = len(prospects)
+
+        elif intelligence:
+            prospects = prepare_prospects(
+                csv_file,
+                campaign_obj,
+            )
+            intelligence_prospect_list = _limited(prospects, limit)
+
+            _generate_intelligence_reports(intelligence_prospect_list)
+
+            export_prospects(
+                prospects,
+                output_file,
+            )
+
+            _print_ghl_sync_section(
+                enabled=False,
+                total_processed=len(prospects),
+                limit=limit,
+                prospects_synced=0,
+                dry_run=dry_run,
             )
 
             processed = len(prospects)

@@ -29,6 +29,7 @@ flowchart TD
     E --> F["Intelligence Foundations"]
     F --> F1["People Enrichment"]
     F --> F2["Website Intelligence"]
+    F --> F3["Google Business Intelligence"]
     F --> G["Import History Check"]
     G --> H{"Dry Run?"}
     H -->|"Yes"| I["Would-Sync Summary"]
@@ -122,15 +123,33 @@ Match priority:
 Implemented:
 
 - people enrichment framework;
-- website intelligence framework.
+- website intelligence framework;
+- Google Business Profile Intelligence foundation;
+- Sales Opportunity Engine;
+- business intelligence CSV and XLSX reports;
+- Elula Business Growth Assessment PDFs.
 
 Planned:
 
-- Google Business Profile Intelligence;
 - decision-maker discovery;
 - AI call preparation.
 
-Current intelligence does not write new people or website fields into Elula BizHub. This prevents premature CRM field mapping and keeps production sync stable.
+Current intelligence does not write new people, website, or Google Business fields into Elula BizHub. This prevents premature CRM field mapping and keeps production sync stable.
+
+## Google Business Intelligence
+
+Google Business intelligence lives under `integrations/google_business/` and `modules/google_business_intelligence.py`.
+
+Implemented behavior:
+
+- parses available Google Maps scraper fields;
+- handles missing data without crashing;
+- calculates profile completeness;
+- produces conservative sales opportunity findings;
+- generates internal CSV and XLSX reports;
+- generates branded Elula Business Growth Assessment PDFs.
+
+It does not call paid APIs and does not write intelligence to Elula BizHub.
 
 ## Elula BizHub Integration
 

@@ -36,6 +36,22 @@ def main():
         default="gauteng",
         help="Campaign name",
     )
+    process_parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Limit prospects checked after processing.",
+    )
+    process_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Run report generation without live Elula BizHub writes.",
+    )
+    process_parser.add_argument(
+        "--intelligence",
+        action="store_true",
+        help="Generate Google Business intelligence reports.",
+    )
 
     run_parser = subparsers.add_parser(
         "run",
@@ -77,6 +93,11 @@ def main():
         action="store_true",
         help="Run without creating or updating Elula BizHub records.",
     )
+    execute_parser.add_argument(
+        "--intelligence",
+        action="store_true",
+        help="Generate Google Business intelligence reports.",
+    )
 
     refresh_parser = subparsers.add_parser(
         "refresh-ghl-metadata",
@@ -99,6 +120,9 @@ def main():
         process_command(
             industry=args.industry,
             campaign=args.campaign,
+            limit=args.limit,
+            dry_run=args.dry_run,
+            intelligence=args.intelligence,
         )
 
     elif args.command == "run":
@@ -113,6 +137,7 @@ def main():
             campaign=args.campaign,
             limit=args.limit,
             dry_run=args.dry_run,
+            intelligence=args.intelligence,
         )
 
     elif args.command == "refresh-ghl-metadata":

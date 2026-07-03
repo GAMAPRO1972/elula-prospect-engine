@@ -4,13 +4,13 @@
 
 Elula Prospect Engine is the prospect discovery and intelligence layer for Elula Business Dynamics. Its long-term role is to feed qualified, sales-ready opportunities into Elula BizHub and support future sales automation, industry intelligence, and AI-assisted execution.
 
-Current version: `v0.4.0`
+Current version: `v0.5.0`
 
 ## Current Status
 
-`v0.4.0` is complete. The application code includes campaign scraping, lead processing, Elula BizHub sync, import history, cross-run duplicate prevention, people enrichment foundation, website intelligence foundation, dry-run mode, and safe `--limit` testing.
+`v0.5.0` adds Google Business Profile Intelligence and the Elula Business Growth Assessment reporting foundation. Intelligence is report-only in this release and is not written to Elula BizHub.
 
-The next planned release is `v0.5.0`: Google Business Profile Intelligence.
+The next planned release is `v0.6.0`: Decision Maker Discovery.
 
 For full onboarding context, start with [Project Context](docs/PROJECT_CONTEXT.md).
 
@@ -52,6 +52,12 @@ Safe full workflow validation:
 .venv\Scripts\python.exe main.py execute --industry security --campaign gauteng --limit 3 --dry-run
 ```
 
+Generate Google Business intelligence reports safely:
+
+```powershell
+.venv\Scripts\python.exe main.py execute --industry security --campaign gauteng --limit 3 --intelligence --dry-run
+```
+
 Limited live sync only after validation:
 
 ```powershell
@@ -67,6 +73,7 @@ Compile check:
 ## Safety Rules
 
 - Use `--dry-run` before live sync.
+- `--dry-run` prevents Elula BizHub writes and import-history writes; it may still create local reports, output files, and archive processed input CSV files.
 - Use `--limit` before any larger live run.
 - Never run a full live sync unless explicitly instructed.
 - Do not commit, tag, or push unless explicitly instructed.
