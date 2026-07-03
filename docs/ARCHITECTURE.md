@@ -1,28 +1,67 @@
 # Architecture
 
-## Overview
+## Purpose
 
-Elula Prospect Engine is a Python CLI system organized around campaign execution, prospect processing, enrichment, duplicate prevention, and Elula BizHub sync.
+This document explains how Elula Prospect Engine is structured. For onboarding sequence and operating rules, use [Project Context](PROJECT_CONTEXT.md) as the source of truth.
+
+## Current Architecture
+
+```mermaid
+flowchart LR
+    A["Google Maps"] --> B["Processing"]
+    B --> C["Intelligence"]
+    C --> D["Elula BizHub"]
+    D --> E["Sales"]
+```
+
+Detailed current flow:
 
 ```mermaid
 flowchart TD
-    A["Campaign JSON and Search Terms"] --> B["CLI Commands"]
+    A["Campaign JSON and Search Terms"] --> B["CLI"]
     B --> C["Google Maps Scraper"]
     C --> D["CSV Input"]
     D --> E["Lead Processing"]
-    E --> F["People Enrichment Framework"]
-    E --> G["Website Intelligence Framework"]
-    F --> H["Import History Check"]
-    G --> H
-    H --> I{"Dry Run?"}
-    I -->|"Yes"| J["Would-Sync Summary"]
-    I -->|"No"| K["Elula BizHub Sync"]
-    K --> L["Contacts, Opportunities, Tasks"]
+    E --> E1["Cleaning"]
+    E --> E2["In-Run Deduplication"]
+    E --> E3["Opportunity Scoring"]
+    E --> E4["Product and Owner Assignment"]
+    E --> F["Intelligence Foundations"]
+    F --> F1["People Enrichment"]
+    F --> F2["Website Intelligence"]
+    F --> G["Import History Check"]
+    G --> H{"Dry Run?"}
+    H -->|"Yes"| I["Would-Sync Summary"]
+    H -->|"No"| J["Elula BizHub Writes"]
+    J --> K["Contact Upsert"]
+    J --> L["Opportunity Creation"]
+    J --> M["Task Creation"]
+    K --> N["Sales Follow-Up"]
+    L --> N
+    M --> N
 ```
 
-## CLI
+## Future Platform Architecture
 
-The CLI is defined in `main.py`.
+```mermaid
+flowchart LR
+    A["Prospect Engine"] --> B["Sales Machine"]
+    A --> C["Industry Intelligence"]
+    B --> D["AI Assistants"]
+    C --> D
+    D --> E["Elula BizHub"]
+    E --> F["Appointments and Sales Operations"]
+```
+
+Future roles:
+
+- Prospect Engine: discovers and qualifies business prospects.
+- Sales Machine: manages outreach and follow-up execution.
+- Industry Intelligence: provides market, sector, and campaign context.
+- AI Assistants: support call prep, outreach, summaries, and operational execution.
+- Elula BizHub: remains the CRM and automation control center.
+
+## CLI
 
 Implemented commands:
 
@@ -31,184 +70,73 @@ Implemented commands:
 - `execute`: run scraper, processing, enrichment checks, duplicate checks, and optional sync.
 - `refresh-ghl-metadata`: refresh local Elula BizHub metadata.
 
-Important execution controls:
+Execution controls:
 
-- `--limit` restricts the number of prospects checked after processing.
-- `--dry-run` runs safely without Elula BizHub writes or import history writes.
+- `--limit`: restricts how many processed prospects are checked after processing.
+- `--dry-run`: prevents Elula BizHub writes and import history writes.
 
 ## Campaign Manager
 
-Campaign configuration lives under `campaigns/<industry>/<campaign>.json`.
+Campaigns live under `campaigns/<industry>/<campaign>.json` with matching search terms in `.txt` files.
 
-Campaign text queries live beside the JSON file as `.txt` files.
-
-Campaign data controls:
+Campaign configuration controls:
 
 - campaign identity;
-- industry;
-- province and country;
+- industry and geography;
 - source;
-- primary and secondary product focus;
-- pipeline;
+- product focus;
+- target pipeline;
 - live sync enablement;
 - active status.
 
 ## Lead Processing
 
-Lead processing converts raw scraper CSV rows into structured prospects.
+Processing converts raw scraper CSV rows into structured prospects.
 
-Processing includes:
+Implemented steps:
 
 - cleaning;
-- deduplication;
-- scoring;
-- owner assignment;
+- in-run deduplication;
+- opportunity scoring;
 - product assignment;
+- owner assignment;
 - CSV export.
 
-## Cleaning
+## Duplicate Prevention
 
-Cleaning standardizes fields before scoring and sync.
+Duplicate prevention has two layers:
 
-Current cleaning targets include:
+- in-run deduplication removes duplicates inside a single processed batch;
+- import history prevents repeated Elula BizHub writes across runs.
 
-- company names;
-- phone numbers;
-- website URLs;
-- email values.
+Persistent import history is stored in `data/import_history.json`.
 
-## Deduplication
-
-There are two layers of deduplication:
-
-```text
-In-run deduplication
-  Removes duplicates inside a single processed CSV batch.
-
-Cross-run duplicate prevention
-  Uses persistent import history to prevent repeated Elula BizHub writes.
-```
-
-Match preference:
+Match priority:
 
 1. normalized website;
 2. normalized phone;
 3. normalized company name.
 
-## Opportunity Scoring
+## Intelligence Layer
 
-Opportunity scoring evaluates a prospect's readiness and quality using available data such as website, email, phone, and other prospect fields.
+Implemented:
 
-The score is used to support sales prioritization. It does not replace human qualification.
+- people enrichment framework;
+- website intelligence framework.
 
-## Product Assignment
+Planned:
 
-Product assignment determines the primary and secondary product focus for the prospect.
-
-Current product context includes:
-
-- Elula BizHub;
-- Red XRay;
-- Elula Mobile;
-- future Elula Skills and Elula Compliance positioning.
-
-## Owner Assignment
-
-Owner assignment routes prospects to the correct internal owner for follow-up.
-
-Owner metadata must match the refreshed Elula BizHub owner records before live sync.
-
-## Import History
-
-Import history is stored in `data/import_history.json`.
-
-It prevents duplicate contacts, opportunities, and tasks across repeated runs.
-
-Rules:
-
-- Check import history before live Elula BizHub writes.
-- Skip records that already exist in the ledger.
-- Record a prospect only after contact upsert, opportunity creation, and task creation succeed.
-- Do not write import history during dry-run mode.
-
-## People Enrichment
-
-People enrichment lives under `integrations/people/`.
-
-Implemented foundation:
-
-- `Person` dataclass.
-- provider interface;
-- empty provider;
-- manual provider for controlled local testing;
-- parser and merge logic.
-
-Current behavior:
-
-- runs safely;
-- returns no people by default;
-- does not call paid or external enrichment APIs;
-- does not create people in Elula BizHub.
-
-Future behavior:
-
+- Google Business Profile Intelligence;
 - decision-maker discovery;
-- role detection;
-- confidence scoring;
-- CRM field mapping when approved.
+- AI call preparation.
 
-## Website Intelligence
-
-Website intelligence lives under `integrations/website/`.
-
-Implemented foundation:
-
-- website reachability;
-- HTTPS detection;
-- title and meta description;
-- contact, about, team, and careers page checks;
-- email and phone extraction;
-- social link detection;
-- WhatsApp link detection;
-- contact form detection;
-- live chat indicators;
-- analytics, tag manager, and Meta Pixel detection;
-- basic CMS detection;
-- website quality score;
-- digital maturity score;
-- findings and recommendations.
-
-Current behavior:
-
-- analyzes only one website per prospect;
-- fetches the homepage and limited obvious pages;
-- does not write website intelligence into Elula BizHub.
-
-## Dry Run
-
-Dry-run mode is a production safety feature.
-
-Dry-run allows:
-
-- scraper execution;
-- processing;
-- people enrichment;
-- website intelligence;
-- duplicate checks;
-- would-sync summary.
-
-Dry-run blocks:
-
-- contact upsert;
-- opportunity creation;
-- task creation;
-- import history writes.
+Current intelligence does not write new people or website fields into Elula BizHub. This prevents premature CRM field mapping and keeps production sync stable.
 
 ## Elula BizHub Integration
 
-Elula BizHub integration lives under `integrations/ghl/`.
+Elula BizHub integration is stored under `integrations/ghl/`.
 
-Core responsibilities:
+Responsibilities:
 
 - API communication;
 - metadata refresh;
@@ -217,32 +145,24 @@ Core responsibilities:
 - task creation;
 - owner, pipeline, stage, and tag mapping.
 
-The code may reference GoHighLevel naming where required by API naming. User-facing documentation should use Elula BizHub.
+The code may use GoHighLevel naming where required by API naming. User-facing documentation should use Elula BizHub.
 
-## Future Google Business Intelligence
+## Dry Run
 
-Planned for `v0.5`.
+Dry-run mode exists to validate the workflow without live CRM writes.
 
-Expected signals:
+Dry-run allows:
 
-- business profile completeness;
-- ratings and review volume;
-- category alignment;
-- operating status;
-- location relevance;
-- service-area signals;
-- profile quality indicators.
+- scraper execution;
+- processing;
+- people enrichment;
+- website intelligence;
+- import history duplicate checks;
+- would-sync summary.
 
-## Future AI Layer
+Dry-run blocks:
 
-Planned after stronger intelligence foundations are in place.
-
-AI should support:
-
-- call preparation;
-- objection prediction;
-- outreach personalization;
-- business pain-point summaries;
-- product-positioning recommendations.
-
-AI should not replace operational safety controls, duplicate prevention, or CRM validation.
+- contact upsert;
+- opportunity creation;
+- task creation;
+- import history writes.

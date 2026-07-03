@@ -6,107 +6,170 @@
 - Keep Elula BizHub as the central operating platform.
 - Prioritize qualified appointments over raw lead volume.
 - Add intelligence layers incrementally.
-- Avoid paid or external APIs until provider interfaces and safety controls are ready.
+- Clearly separate implemented, planned, and future work.
 
-## v0.5 - Google Business Profile Intelligence
+## Completed Releases
 
-Objective: enrich prospects with business profile signals before sync and sales follow-up.
+### v0.1 - Foundation
 
-Planned work:
+Status: implemented.
 
-- Extract profile completeness signals.
-- Capture review rating and review count intelligence.
-- Identify business category alignment.
-- Detect profile quality and activity indicators.
-- Add sales findings and recommendations.
-- Keep analysis safe and lightweight.
-- Do not change live sync behavior until field mapping is approved.
+Purpose:
 
-Expected outcome:
+- establish the initial prospecting engine foundation;
+- support Google Maps prospect discovery;
+- create the first executable lead-generation workflow.
 
-- Sales team has better context before calling.
-- Prospect quality can be prioritized more accurately.
+Outcome:
 
-## v0.6 - Decision Maker Discovery
+- the project moved from concept to working prospect discovery foundation.
 
-Objective: attach real decision makers to each imported business.
+### v0.2 - Processing
 
-Planned work:
+Status: implemented.
 
-- Expand people enrichment providers.
-- Add role and seniority classification.
-- Add confidence scoring.
-- Add source tracking.
-- Add optional approved external providers.
-- Prepare Elula BizHub field and note mapping.
+Purpose:
 
-Expected outcome:
+- convert raw lead data into cleaner prospect records;
+- add cleaning, deduplication, scoring, product assignment, and owner assignment.
 
-- Calls and outreach target the correct people more often.
+Outcome:
 
-## v0.7 - AI Call Preparation
+- campaign outputs became more consistent and operationally useful.
 
-Objective: generate useful call-prep briefs for sales follow-up.
+### v0.3 - Elula BizHub Integration
 
-Planned work:
+Status: implemented.
 
-- Summarize prospect context.
-- Explain likely business needs.
-- Recommend positioning for Elula BizHub, Red XRay, Elula Skills, Elula Compliance, and Elula Mobile.
-- Generate call openers and discovery questions.
-- Keep outputs auditable and tied to source data.
+Purpose:
 
-Expected outcome:
+- connect processed prospects to Elula BizHub;
+- add metadata refresh;
+- support contact upsert, opportunity creation, task creation, and safe `--limit` testing.
 
-- Sales owners can prepare faster and run more relevant calls.
+Outcome:
 
-## v0.8 - AI Outreach
+- the system became a controlled prospect-to-CRM workflow.
 
-Objective: support controlled AI-assisted outreach.
+### v0.4 - Production Platform
 
-Planned work:
+Status: implemented.
 
-- Draft WhatsApp, email, and follow-up messaging.
-- Add campaign-specific messaging rules.
-- Support approval workflows before sending.
-- Track outreach outcomes.
-- Keep Elula BizHub as the communication and pipeline system.
+Purpose:
 
-Expected outcome:
+- add production safety and intelligence foundations;
+- prevent duplicate imports across runs;
+- add people enrichment framework;
+- add website intelligence framework;
+- add dry-run mode;
+- create long-term engineering documentation.
 
-- Outreach quality improves without losing operational control.
+Outcome:
 
-## v0.9 - Sales Intelligence Platform
+- the system can be validated safely and extended toward richer sales intelligence.
 
-Objective: turn the Prospect Engine into a repeatable sales intelligence operation.
+## Planned Releases
 
-Planned work:
+### v0.5 - Google Business Profile Intelligence
 
-- Add reporting dashboards.
-- Track lead source quality.
-- Track processing and sync performance.
-- Track appointment outcomes.
-- Improve campaign templates.
-- Add reusable operational playbooks.
+Status: planned.
 
-Expected outcome:
+Objective:
 
-- Elula Business Dynamics can run repeatable, measurable prospecting operations.
+- enrich prospects with Google business profile signals before sales follow-up.
 
-## v1.0 - Commercial Release
+Sprint 5 must begin with:
 
-Objective: release a stable commercial-grade prospecting system.
+- sprint plan;
+- architecture review;
+- acceptance criteria;
+- dry-run validation plan;
+- documentation update plan.
 
-Planned work:
+Expected scope:
 
-- Harden deployment.
-- Finalize documentation.
-- Add release packaging.
-- Finalize data retention rules.
-- Finalize live sync governance.
-- Add production monitoring.
-- Define support process.
+- profile completeness;
+- review rating and review volume;
+- category alignment;
+- profile quality indicators;
+- sales findings and recommendations.
 
-Expected outcome:
+### v0.6 - Decision Maker Discovery
 
-- The system is ready for controlled commercial operation.
+Status: planned.
+
+Objective:
+
+- attach real decision makers to imported businesses.
+
+Expected scope:
+
+- provider-backed people enrichment;
+- role and seniority classification;
+- confidence scoring;
+- source tracking;
+- approved Elula BizHub mapping.
+
+### v0.7 - AI Call Preparation
+
+Status: planned.
+
+Objective:
+
+- generate practical call-prep briefs for sales owners.
+
+Expected scope:
+
+- business context summaries;
+- likely pain points;
+- recommended product positioning;
+- discovery questions;
+- appointment-focused call prompts.
+
+### v0.8 - AI Outreach
+
+Status: planned.
+
+Objective:
+
+- support controlled AI-assisted outreach.
+
+Expected scope:
+
+- WhatsApp and email draft generation;
+- campaign-specific messaging rules;
+- approval workflows;
+- outcome tracking.
+
+### v0.9 - Sales Intelligence Platform
+
+Status: future.
+
+Objective:
+
+- turn the Prospect Engine into a measurable sales intelligence operation.
+
+Expected scope:
+
+- reporting dashboards;
+- lead source quality metrics;
+- processing and sync performance metrics;
+- appointment outcome tracking;
+- campaign templates and playbooks.
+
+### v1.0 - Commercial Release
+
+Status: future.
+
+Objective:
+
+- release a stable commercial-grade platform.
+
+Expected scope:
+
+- hardened deployment;
+- production monitoring;
+- release packaging;
+- data retention rules;
+- live sync governance;
+- support process.

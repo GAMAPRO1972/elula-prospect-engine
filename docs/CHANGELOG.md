@@ -2,6 +2,8 @@
 
 ## v0.4.0
 
+Status: released. Sprint 4 is complete.
+
 Released scope:
 
 - Added persistent import history.
@@ -11,7 +13,7 @@ Released scope:
 - Added dry-run mode.
 - Preserved safe `--limit` testing.
 - Improved sync summary counters.
-- Added permanent documentation package.
+- Added engineering documentation package.
 
 Operational impact:
 

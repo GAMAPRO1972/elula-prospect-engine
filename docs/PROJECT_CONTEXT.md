@@ -1,109 +1,132 @@
 # Project Context
 
-## Current Version
+```text
+Current Version: v0.4.0
+Status: Production Beta
+Last Updated: 2026-07-03
+Repository: https://github.com/GAMAPRO1972/elula-prospect-engine
+Next Objective: Sprint 5 - Google Business Profile Intelligence
+```
+
+This is the first document to read for all future developers, AI assistants, sprint handoffs, and project onboarding. It is the authoritative context document for the Elula Prospect Engine.
+
+## First Page Summary
+
+What are we building?
+
+Elula Prospect Engine is a Python CLI application that discovers businesses, processes prospect data, prepares sales intelligence, prevents duplicate imports, and syncs qualified prospects into Elula BizHub.
+
+Why are we building it?
+
+Elula Business Dynamics needs a repeatable system for generating qualified appointments. The Prospect Engine creates the upstream lead generation and intelligence layer for that appointment engine.
+
+What problem does it solve?
+
+Manual prospecting is slow, inconsistent, difficult to measure, and prone to duplicate CRM activity. The Prospect Engine centralizes prospect discovery, cleaning, scoring, owner assignment, enrichment checks, duplicate prevention, and controlled Elula BizHub sync.
+
+Current version:
 
 `v0.4.0`
 
-Elula Prospect Engine is a Python CLI application for campaign-based prospect discovery, enrichment, scoring, duplicate prevention, and controlled sync into Elula BizHub.
+Current project status:
 
-## Project Vision
+The `v0.4.0` application code is complete. It includes production-safety foundations: dry-run mode, safe `--limit` testing, persistent import history, cross-run duplicate prevention, people enrichment foundation, and website intelligence foundation.
 
-Build a reliable prospecting engine that turns business discovery data into qualified appointment opportunities for Elula Business Dynamics.
+Immediate next task:
 
-The long-term vision is a sales intelligence platform that can discover companies, understand their digital footprint, identify relevant decision makers, prepare call intelligence, support AI-assisted outreach, and centralize the resulting sales pipeline inside Elula BizHub.
+Prepare `v0.5.0`: Google Business Profile Intelligence. The next implementation should add safe profile intelligence without changing existing live sync behavior until mapping and operational rules are approved.
 
 ## Business Objective
 
 Generate qualified appointments for Elula Business Dynamics.
 
-The system supports this by:
+Appointments are the primary KPI. Lead volume is useful only when it improves the number or quality of qualified appointments.
 
-- discovering target businesses from campaign search terms;
-- cleaning and deduplicating lead data;
-- scoring opportunity quality;
-- assigning owners and product focus;
-- enriching prospects with people and website intelligence frameworks;
-- importing qualified prospects into Elula BizHub;
-- preventing duplicate contacts, opportunities, and tasks across repeated runs.
+## Product Vision
 
-Appointments are the primary KPI. All engineering decisions should improve appointment quality, lead routing clarity, operational reliability, or sales execution speed.
+The Prospect Engine is the first layer of a broader Elula Business Dynamics platform:
+
+- Prospect Engine discovers and qualifies business prospects.
+- Sales Machine will manage outreach and follow-up execution.
+- Industry Intelligence will provide sector-specific context and positioning.
+- AI Assistants will support call preparation, outreach drafting, and operational workflows.
+- Elula BizHub remains the central CRM and automation platform.
+
+See [Product Vision](PRODUCT_VISION.md) for the long-term platform view.
 
 ## High-Level Architecture
 
 ```text
-Campaign Config
-      |
-      v
-Google Maps Scraper
-      |
-      v
-Raw CSV Input
-      |
-      v
-Lead Processing
+Google Maps Campaigns
+        |
+        v
+Processing
   - cleaning
   - deduplication
   - scoring
   - assignment
-      |
-      v
-Pre-Sync Intelligence
-  - people enrichment framework
-  - website intelligence framework
-  - import history duplicate check
-      |
-      v
-Elula BizHub Sync
+        |
+        v
+Intelligence
+  - people enrichment foundation
+  - website intelligence foundation
+  - future Google Business Profile Intelligence
+        |
+        v
+Elula BizHub
   - contact upsert
   - opportunity creation
   - task creation
-      |
-      v
+        |
+        v
 Sales Follow-Up
+  - owner action
+  - qualification
+  - appointment generation
 ```
 
-## Folder Structure
+## Repository Structure
 
 ```text
-campaigns/           Campaign definitions and search query files.
-commands/            CLI command modules.
-config/              Settings, product rules, and configuration logic.
-data/                Persistent runtime data such as import history.
-docs/                Permanent engineering documentation.
-integrations/ghl/    Elula BizHub API integration and metadata.
-integrations/people/ People enrichment provider foundation.
+campaigns/            Campaign definitions and search query files.
+commands/             CLI command modules.
+config/               Settings, product rules, and configuration logic.
+data/                 Persistent runtime data such as import history.
+docs/                 Permanent engineering documentation.
+integrations/ghl/     Elula BizHub API integration and metadata.
+integrations/people/  People enrichment provider foundation.
 integrations/website/ Website intelligence analysis foundation.
-modules/             Core processing, sync, enrichment, and utility logic.
-tools/               Operational scripts and support utilities.
-input/               Incoming CSV files waiting for processing.
-output/              Processed prospect exports.
-archive/             Archived source files after processing.
-logs/                Runtime and sync logs.
-reports/             Operational reports.
-scraper-data/        Scraper runtime data.
-templates/           Reusable templates.
+modules/              Core processing, sync, enrichment, and utility logic.
+tools/                Operational scripts and support utilities.
+input/                Incoming CSV files waiting for processing.
+output/               Processed prospect exports.
+archive/              Archived source files after processing.
+logs/                 Runtime and sync logs.
+reports/              Operational reports.
+scraper-data/         Scraper runtime data.
+templates/            Reusable templates.
 ```
 
 ## Current Modules
 
-- `main.py` defines the CLI entry point.
-- `commands/run.py` exports campaign queries and starts the scraper.
-- `commands/process.py` processes CSV input and optionally syncs prospects.
-- `commands/execute.py` runs the full workflow.
-- `commands/refresh_ghl_metadata.py` refreshes Elula BizHub metadata.
-- `modules/campaign_manager.py` loads campaign configuration.
-- `modules/process_leads.py` builds processed prospects.
-- `modules/cleaner.py` cleans raw scraper records.
-- `modules/deduplicator.py` removes duplicates within a processing run.
-- `modules/opportunity_scoring.py` scores prospects.
-- `modules/assignment_engine.py` assigns owner and product focus.
-- `modules/import_history.py` stores cross-run import history.
-- `modules/ghl_sync.py` orchestrates Elula BizHub sync.
-- `integrations/people/*` defines the people enrichment foundation.
-- `integrations/website/*` defines the website intelligence foundation.
-- `integrations/ghl/*` handles Elula BizHub API operations.
+- `main.py`: CLI entry point.
+- `commands/run.py`: exports campaign queries and starts the scraper.
+- `commands/process.py`: processes CSV input and optionally syncs prospects.
+- `commands/execute.py`: runs the full workflow.
+- `commands/refresh_ghl_metadata.py`: refreshes Elula BizHub metadata.
+- `modules/campaign_manager.py`: loads campaign configuration.
+- `modules/process_leads.py`: builds processed prospects.
+- `modules/cleaner.py`: cleans raw scraper records.
+- `modules/deduplicator.py`: removes duplicates within a processing run.
+- `modules/opportunity_scoring.py`: scores prospects.
+- `modules/assignment_engine.py`: assigns owner and product focus.
+- `modules/import_history.py`: stores cross-run import history.
+- `modules/ghl_sync.py`: orchestrates Elula BizHub sync.
+- `integrations/ghl/*`: handles Elula BizHub API operations.
+- `integrations/people/*`: provides the people enrichment foundation.
+- `integrations/website/*`: provides the website intelligence foundation.
 
-## Completed Features
+## Implemented in v0.4.0
 
 - Google Maps campaign scraper.
 - Campaign manager.
@@ -112,8 +135,7 @@ templates/           Reusable templates.
 - Opportunity scoring.
 - Product assignment.
 - Owner assignment.
-- Elula BizHub integration.
-- Contact upsert.
+- Elula BizHub contact upsert.
 - Opportunity creation.
 - Task creation.
 - Metadata refresh.
@@ -123,34 +145,33 @@ templates/           Reusable templates.
 - Website intelligence framework.
 - Dry-run mode.
 - Safe `--limit` testing.
-- README and AGENTS instructions.
 
 ## Development Workflow
 
-1. Inspect the current repository state.
-2. Read the relevant modules before editing.
-3. Keep changes scoped to the requested sprint or fix.
-4. Provide complete replacement files when files are changed.
-5. Compile before completion for code changes.
-6. Use `--dry-run` before live sync tests.
-7. Use `--limit` before any larger live run.
-8. Do not commit unless explicitly instructed.
+1. Review `README.md`, this document, and the relevant module files.
+2. Inspect current repository status.
+3. Keep changes scoped to the task.
+4. Preserve existing CLI behavior unless explicitly changing it.
+5. Provide complete replacement files when files are changed.
+6. Compile before completion for code changes.
+7. Use dry-run before live sync validation.
+8. Do not commit, tag, or push unless explicitly instructed.
 
 ## Testing Workflow
 
-Standard compile check:
+Compile check:
 
 ```powershell
 .venv\Scripts\python.exe -m compileall commands config integrations modules tools
 ```
 
-Safe execution check:
+Safe workflow validation:
 
 ```powershell
 .venv\Scripts\python.exe main.py execute --limit 3 --dry-run
 ```
 
-Limited live check, only when approved:
+Limited live validation, only when approved:
 
 ```powershell
 .venv\Scripts\python.exe main.py execute --limit 3
@@ -158,80 +179,43 @@ Limited live check, only when approved:
 
 Never run full live sync unless explicitly instructed.
 
-## Git Workflow
-
-- Use `git status` before release work.
-- Do not commit unless explicitly instructed.
-- Do not create tags unless explicitly instructed.
-- Do not push unless explicitly instructed.
-- Keep unrelated changes separate.
-- Never revert user changes without explicit approval.
-
 ## Release Workflow
 
 When explicitly instructed:
 
 1. Run `git status`.
-2. Confirm only approved files changed.
-3. Run compile checks.
+2. Confirm release scope and changed files.
+3. Run compile validation.
 4. Run dry-run validation.
 5. Run limited live validation only if approved.
-6. Commit approved changes.
-7. Create the release tag.
-8. Push branch and tag.
-9. Create ZIP backup.
+6. Update documentation.
+7. Commit approved files.
+8. Create the version tag.
+9. Push branch and tag.
+10. Create ZIP backup.
+
+## AI Team Responsibilities
+
+- Gary: CEO and Product Owner. Defines commercial priorities, approves live sync and release actions.
+- ChatGPT: Chief Software Architect. Owns architecture direction, roadmap, documentation, release planning, and code review.
+- Codex: Senior Software Engineer. Implements scoped changes, refactors safely, runs validation, and reports outcomes.
 
 ## Sprint History
 
-- `v0.1`: Initial prospecting engine foundation.
-- `v0.2`: Campaign processing, cleaning, scoring, and assignment improvements.
-- `v0.3`: Elula BizHub sync, metadata refresh, and controlled `--limit` testing.
-- `v0.4`: Import history, cross-run duplicate prevention, people enrichment foundation, website intelligence foundation, and dry-run mode.
-
-## Current Roadmap
-
-- `v0.5`: Google Business Profile Intelligence.
-- `v0.6`: Decision Maker Discovery.
-- `v0.7`: AI Call Preparation.
-- `v0.8`: AI Outreach.
-- `v0.9`: Sales Intelligence Platform.
-- `v1.0`: Commercial Release.
-
-## Current Project Status
-
-The `v0.4.0` application code is complete. The system has production-safety foundations for duplicate prevention, dry-run execution, people enrichment, and website intelligence. People and website intelligence are not yet written into Elula BizHub.
-
-## Immediate Next Task
-
-Prepare for `v0.5`: Google Business Profile Intelligence. The next implementation should add safe collection and interpretation of Google business profile signals without disrupting existing sync behavior.
-
-## AI Team Roles
-
-- Gary: CEO and Product Owner.
-- ChatGPT: Chief Software Architect for architecture, roadmap, documentation, release management, and code reviews.
-- Codex: Senior Software Engineer for implementation, refactoring, and testing.
-
-## Coding Rules
-
-- Never use temporary hacks.
-- Provide complete replacement files when files are changed.
-- Preserve CLI behavior unless the task explicitly changes it.
-- Preserve `--limit` behavior.
-- Use `--dry-run` before live sync.
-- Do not commit unless explicitly instructed.
-- Keep modules loosely coupled.
-- Prefer provider interfaces for future external services.
-- Keep production safety higher priority than cleverness.
+- `v0.1 Foundation`: initial Google Maps prospecting foundation.
+- `v0.2 Processing`: cleaning, deduplication, scoring, product assignment, and owner assignment.
+- `v0.3 Elula BizHub Integration`: metadata refresh, contact upsert, opportunity creation, task creation, and safe `--limit` testing.
+- `v0.4 Production Platform`: import history, cross-run duplicate prevention, people enrichment foundation, website intelligence foundation, dry-run mode, and engineering documentation.
 
 ## Business Rules
 
 - Appointments are the primary KPI.
 - Elula BizHub is the central CRM and operations platform.
-- Avoid unnecessary subaccount fragmentation.
 - Duplicate prevention is mandatory before live CRM writes.
-- Live sync must be controlled, logged, and limited before scale.
-- Sales intelligence must support practical call preparation and appointment generation.
+- Dry-run validation must precede live sync validation.
+- Live sync must use `--limit` before scale.
+- People and website intelligence must not write to Elula BizHub until mapping and operating rules are approved.
 
 ## Future Vision
 
-The Prospect Engine should become a centralized sales intelligence and appointment-generation platform for Elula Business Dynamics. Future versions should add deeper business profile intelligence, decision-maker discovery, AI-assisted call prep, AI outreach support, and reporting dashboards that connect lead source quality to appointment outcomes.
+The Prospect Engine should become the discovery and intelligence source for a broader Elula Business Dynamics platform. Future releases should add Google Business Profile Intelligence, decision-maker discovery, AI call preparation, AI outreach, reporting dashboards, and sales intelligence workflows that connect prospect quality to booked appointments.

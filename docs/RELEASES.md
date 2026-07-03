@@ -4,6 +4,8 @@
 
 `v0.4.0` is the production-safety and intelligence-foundation release.
 
+Status: released. Sprint 4 is complete.
+
 ### Highlights
 
 - Persistent import history.
@@ -11,6 +13,7 @@
 - People enrichment framework.
 - Website intelligence framework.
 - Dry-run mode.
+- Engineering documentation package.
 - Safer validation before live Elula BizHub sync.
 
 ### Business Value
