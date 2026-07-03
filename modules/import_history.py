@@ -93,17 +93,7 @@ def build_match_key(prospect: dict[str, Any]) -> tuple[str, str, str]:
     raise ValueError("Prospect has no website, phone, or company name for import history matching.")
 
 
-def load_import_history() -> dict[str, Any]:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-    if not IMPORT_HISTORY_PATH.exists() or IMPORT_HISTORY_PATH.stat().st_size == 0:
-        ledger = _blank_ledger()
-        save_import_history(ledger)
-        return ledger
-
-    with IMPORT_HISTORY_PATH.open("r", encoding="utf-8") as file:
-        ledger = json.load(file)
-
+def _validate_ledger(ledger: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(ledger, dict):
         raise ValueError("Import history ledger must contain a JSON object.")
 
@@ -114,6 +104,22 @@ def load_import_history() -> dict[str, Any]:
     ledger["version"] = ledger.get("version") or LEDGER_VERSION
 
     return ledger
+
+
+def load_import_history(read_only: bool = False) -> dict[str, Any]:
+    if not read_only:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+    if not IMPORT_HISTORY_PATH.exists() or IMPORT_HISTORY_PATH.stat().st_size == 0:
+        ledger = _blank_ledger()
+        if not read_only:
+            save_import_history(ledger)
+        return ledger
+
+    with IMPORT_HISTORY_PATH.open("r", encoding="utf-8") as file:
+        ledger = json.load(file)
+
+    return _validate_ledger(ledger)
 
 
 def save_import_history(ledger: dict[str, Any]) -> None:

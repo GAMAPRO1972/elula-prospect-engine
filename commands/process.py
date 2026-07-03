@@ -17,16 +17,25 @@ def _print_ghl_sync_section(
     limit,
     prospects_synced,
     summary=None,
+    dry_run=False,
 ):
     summary = summary or {
         "contacts_created": 0,
         "contacts_updated": 0,
         "opportunities_created": 0,
         "tasks_created": 0,
+        "contacts_would_upsert": 0,
+        "opportunities_would_create": 0,
+        "tasks_would_create": 0,
+        "import_history_would_record": 0,
         "imported": 0,
         "skipped": 0,
         "people_checked": 0,
         "people_found": 0,
+        "websites_checked": 0,
+        "websites_reachable": 0,
+        "average_website_quality_score": 0,
+        "average_digital_maturity_score": 0,
         "failures": 0,
     }
 
@@ -34,22 +43,35 @@ def _print_ghl_sync_section(
     print("=" * 60)
     print("ELULA BIZHUB SYNCHRONIZATION")
     print("=" * 60)
+    print(f"Mode                 : {'DRY RUN' if dry_run else 'LIVE'}")
     print(f"Sync Enabled         : {'Yes' if enabled else 'No'}")
     print(f"Total Prospects      : {total_processed}")
     print(f"Limit Applied        : {limit if limit is not None else 'None'}")
     print(f"Prospects Checked    : {prospects_synced}")
     print(f"People Checked       : {summary.get('people_checked', 0)}")
     print(f"People Found         : {summary.get('people_found', 0)}")
-    print(f"Imported             : {summary.get('imported', 0)}")
+    print(f"Websites Checked     : {summary.get('websites_checked', 0)}")
+    print(f"Websites Reachable   : {summary.get('websites_reachable', 0)}")
+    print(f"Avg Website Quality  : {summary.get('average_website_quality_score', 0)}")
+    print(f"Avg Digital Maturity : {summary.get('average_digital_maturity_score', 0)}")
+
+    if dry_run:
+        print(f"Would Upsert Contacts: {summary.get('contacts_would_upsert', 0)}")
+        print(f"Would Create Opps    : {summary.get('opportunities_would_create', 0)}")
+        print(f"Would Create Tasks   : {summary.get('tasks_would_create', 0)}")
+        print(f"Would Record History : {summary.get('import_history_would_record', 0)}")
+    else:
+        print(f"Imported             : {summary.get('imported', 0)}")
+        print(f"Contacts Created     : {summary.get('contacts_created', 0)}")
+        print(f"Contacts Updated     : {summary.get('contacts_updated', 0)}")
+        print(f"Opportunities Created: {summary.get('opportunities_created', 0)}")
+        print(f"Tasks Created        : {summary.get('tasks_created', 0)}")
+
     print(f"Skipped              : {summary.get('skipped', 0)}")
-    print(f"Contacts Created     : {summary.get('contacts_created', 0)}")
-    print(f"Contacts Updated     : {summary.get('contacts_updated', 0)}")
-    print(f"Opportunities Created: {summary.get('opportunities_created', 0)}")
-    print(f"Tasks Created        : {summary.get('tasks_created', 0)}")
     print(f"Failures             : {summary.get('failures', 0)}")
 
 
-def run(industry, campaign, sync_to_ghl=False, limit=None):
+def run(industry, campaign, sync_to_ghl=False, limit=None, dry_run=False):
     if limit is not None and limit < 1:
         raise ValueError("--limit must be greater than zero.")
 
@@ -87,6 +109,7 @@ def run(industry, campaign, sync_to_ghl=False, limit=None):
             summary = sync_prospects(
                 sync_prospect_list,
                 campaign_obj,
+                dry_run=dry_run,
             )
 
             _print_ghl_sync_section(
@@ -95,6 +118,7 @@ def run(industry, campaign, sync_to_ghl=False, limit=None):
                 limit=limit,
                 prospects_synced=len(sync_prospect_list),
                 summary=summary,
+                dry_run=dry_run,
             )
 
             export_prospects(
@@ -116,6 +140,7 @@ def run(industry, campaign, sync_to_ghl=False, limit=None):
                 total_processed=processed,
                 limit=limit,
                 prospects_synced=0,
+                dry_run=dry_run,
             )
 
         archive_file(csv_file)

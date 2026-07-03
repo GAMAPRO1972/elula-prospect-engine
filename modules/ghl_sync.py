@@ -18,6 +18,7 @@ from integrations.ghl.logger import logger
 from integrations.ghl.opportunities import opportunities
 from integrations.ghl.tasks import GHLTasks
 from integrations.people.service import PeopleEnrichmentService
+from integrations.website.service import WebsiteIntelligenceService
 from modules.import_history import (
     build_match_key,
     find_import,
@@ -35,23 +36,54 @@ class SyncSummary:
     contacts_updated: int = 0
     opportunities_created: int = 0
     tasks_created: int = 0
+    contacts_would_upsert: int = 0
+    opportunities_would_create: int = 0
+    tasks_would_create: int = 0
+    import_history_would_record: int = 0
     imported: int = 0
     skipped: int = 0
     people_checked: int = 0
     people_found: int = 0
+    websites_checked: int = 0
+    websites_reachable: int = 0
+    website_quality_score_total: int = 0
+    digital_maturity_score_total: int = 0
     failures: int = 0
+    dry_run: bool = False
 
-    def as_dict(self) -> dict[str, int]:
+    def as_dict(self) -> dict[str, int | float | bool]:
+        average_website_quality = 0
+        average_digital_maturity = 0
+
+        if self.websites_checked:
+            average_website_quality = round(
+                self.website_quality_score_total / self.websites_checked,
+                2,
+            )
+            average_digital_maturity = round(
+                self.digital_maturity_score_total / self.websites_checked,
+                2,
+            )
+
         return {
             "contacts_created": self.contacts_created,
             "contacts_updated": self.contacts_updated,
             "opportunities_created": self.opportunities_created,
             "tasks_created": self.tasks_created,
+            "contacts_would_upsert": self.contacts_would_upsert,
+            "opportunities_would_create": self.opportunities_would_create,
+            "tasks_would_create": self.tasks_would_create,
+            "import_history_would_record": self.import_history_would_record,
             "imported": self.imported,
             "skipped": self.skipped,
             "people_checked": self.people_checked,
             "people_found": self.people_found,
+            "websites_checked": self.websites_checked,
+            "websites_reachable": self.websites_reachable,
+            "average_website_quality_score": average_website_quality,
+            "average_digital_maturity_score": average_digital_maturity,
             "failures": self.failures,
+            "dry_run": self.dry_run,
         }
 
 
@@ -297,9 +329,38 @@ def _check_people(
     summary.people_found += people_found
 
     logger.info(
-        "People enrichment checked for prospect '%s'. people_found=%s.",
+        "%sPeople enrichment checked for prospect '%s'. people_found=%s.",
+        "DRY RUN: " if summary.dry_run else "",
         prospect.get("company_name", "Unknown"),
         people_found,
+    )
+
+
+def _check_website(
+    prospect: dict[str, Any],
+    service: WebsiteIntelligenceService,
+    summary: SyncSummary,
+) -> None:
+    if not prospect.get("website"):
+        return
+
+    intelligence = service.analyze_prospect(prospect)
+
+    summary.websites_checked += 1
+    if intelligence.is_reachable:
+        summary.websites_reachable += 1
+
+    summary.website_quality_score_total += intelligence.website_quality_score
+    summary.digital_maturity_score_total += intelligence.digital_maturity_score
+
+    logger.info(
+        "%sWebsite intelligence checked for prospect '%s'. "
+        "website_reachable=%s, website_quality_score=%s, digital_maturity_score=%s.",
+        "DRY RUN: " if summary.dry_run else "",
+        prospect.get("company_name", "Unknown"),
+        intelligence.is_reachable,
+        intelligence.website_quality_score,
+        intelligence.digital_maturity_score,
     )
 
 
@@ -359,21 +420,60 @@ def _sync_single_prospect(
     }
 
 
-def sync_prospects(prospects: list[dict[str, Any]], campaign) -> dict[str, int]:
+def _dry_run_single_prospect(
+    prospect: dict[str, Any],
+    campaign,
+    metadata: dict[str, Any],
+    summary: SyncSummary,
+) -> None:
+    pipeline = _resolve_by_name(metadata["pipelines"], campaign.config.get("pipeline"), "pipeline")
+    pipeline_id = _record_id(pipeline, "pipeline")
+
+    stage = _resolve_stage(metadata["stages"], pipeline_id, campaign)
+    _record_id(stage, "stage")
+
+    owner = _resolve_owner(metadata["owners"], prospect.get("owner"))
+    owner_id = _record_id(owner, "owner")
+
+    tag_ids = _resolve_tags(metadata["tags"], campaign)
+    _build_contact_payload(prospect, owner_id, tag_ids, campaign)
+
+    summary.contacts_would_upsert += 1
+    summary.opportunities_would_create += 1
+    summary.tasks_would_create += 1
+    summary.import_history_would_record += 1
+
+    logger.info(
+        "DRY RUN: Would upsert contact, create opportunity in pipeline '%s', "
+        "create initial task, and record import history for prospect '%s'.",
+        pipeline_id,
+        prospect.get("company_name", "Unknown"),
+    )
+
+
+def sync_prospects(
+    prospects: list[dict[str, Any]],
+    campaign,
+    dry_run: bool = False,
+) -> dict[str, int | float | bool]:
     """
     Synchronise processed prospects with Elula BizHub.
     """
 
-    summary = SyncSummary()
+    summary = SyncSummary(dry_run=dry_run)
     task_service = GHLTasks(ghl)
     people_service = PeopleEnrichmentService()
-    import_history = load_import_history()
+    website_service = WebsiteIntelligenceService()
+    import_history = load_import_history(read_only=dry_run)
     metadata = {
         "pipelines": _load_metadata("pipelines.json"),
         "stages": _load_metadata("stages.json"),
         "owners": _load_metadata("owners.json"),
         "tags": _load_metadata("tags.json"),
     }
+
+    if dry_run:
+        logger.info("DRY RUN: Elula BizHub write calls and import history writes are disabled.")
 
     for prospect in prospects:
         company_name = prospect.get("company_name", "Unknown")
@@ -384,6 +484,11 @@ def sync_prospects(prospects: list[dict[str, Any]], campaign) -> dict[str, int]:
                 service=people_service,
                 summary=summary,
             )
+            _check_website(
+                prospect=prospect,
+                service=website_service,
+                summary=summary,
+            )
 
             match_type, match_value, match_key = build_match_key(prospect)
             existing_import = find_import(import_history, match_key)
@@ -391,13 +496,23 @@ def sync_prospects(prospects: list[dict[str, Any]], campaign) -> dict[str, int]:
             if existing_import:
                 summary.skipped += 1
                 logger.info(
-                    "Skipped previously imported prospect '%s' using %s match '%s'. "
+                    "%sSkipped previously imported prospect '%s' using %s match '%s'. "
                     "Original contact: %s, opportunity: %s.",
+                    "DRY RUN: " if dry_run else "",
                     company_name,
                     match_type,
                     match_value,
                     existing_import.get("contact_id", ""),
                     existing_import.get("opportunity_id", ""),
+                )
+                continue
+
+            if dry_run:
+                _dry_run_single_prospect(
+                    prospect=prospect,
+                    campaign=campaign,
+                    metadata=metadata,
+                    summary=summary,
                 )
                 continue
 
@@ -434,7 +549,8 @@ def sync_prospects(prospects: list[dict[str, Any]], campaign) -> dict[str, int]:
         except (GHLAPIError, ValueError, KeyError, json.JSONDecodeError) as exc:
             summary.failures += 1
             logger.exception(
-                "Failed to synchronise prospect '%s': %s",
+                "%sFailed to synchronise prospect '%s': %s",
+                "DRY RUN: " if dry_run else "",
                 company_name,
                 exc,
             )
