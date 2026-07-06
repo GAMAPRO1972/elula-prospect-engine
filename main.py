@@ -10,6 +10,7 @@ from commands.execute import run as execute_command
 from commands.process import run as process_command
 from commands.refresh_ghl_metadata import run as refresh_ghl_metadata_command
 from commands.run import run as run_command
+from commands.test_company_sync import run as test_company_sync_command
 
 
 def main():
@@ -114,6 +115,11 @@ def main():
         help="Elula BizHub company ID used to fetch team users when it is not configured in .env.",
     )
 
+    subparsers.add_parser(
+        "test-company-sync",
+        help="Run a fast Elula BizHub Business API payload test.",
+    )
+
     args = parser.parse_args()
 
     if args.command == "process":
@@ -145,6 +151,9 @@ def main():
             pipeline=args.pipeline,
             company_id=args.company_id,
         )
+
+    elif args.command == "test-company-sync":
+        test_company_sync_command()
 
 
 if __name__ == "__main__":

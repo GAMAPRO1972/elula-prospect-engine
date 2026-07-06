@@ -20,10 +20,14 @@ def _print_ghl_sync_section(
     dry_run=False,
 ):
     summary = summary or {
+        "companies_created": 0,
+        "companies_updated": 0,
+        "company_sync_unavailable": 0,
         "contacts_created": 0,
         "contacts_updated": 0,
         "opportunities_created": 0,
         "tasks_created": 0,
+        "companies_would_upsert": 0,
         "contacts_would_upsert": 0,
         "opportunities_would_create": 0,
         "tasks_would_create": 0,
@@ -56,12 +60,16 @@ def _print_ghl_sync_section(
     print(f"Avg Digital Maturity : {summary.get('average_digital_maturity_score', 0)}")
 
     if dry_run:
+        print(f"Would Upsert Companies: {summary.get('companies_would_upsert', 0)}")
         print(f"Would Upsert Contacts: {summary.get('contacts_would_upsert', 0)}")
         print(f"Would Create Opps    : {summary.get('opportunities_would_create', 0)}")
         print(f"Would Create Tasks   : {summary.get('tasks_would_create', 0)}")
         print(f"Would Record History : {summary.get('import_history_would_record', 0)}")
     else:
         print(f"Imported             : {summary.get('imported', 0)}")
+        print(f"Companies Created    : {summary.get('companies_created', 0)}")
+        print(f"Companies Updated    : {summary.get('companies_updated', 0)}")
+        print(f"Company Sync Skipped : {summary.get('company_sync_unavailable', 0)}")
         print(f"Contacts Created     : {summary.get('contacts_created', 0)}")
         print(f"Contacts Updated     : {summary.get('contacts_updated', 0)}")
         print(f"Opportunities Created: {summary.get('opportunities_created', 0)}")

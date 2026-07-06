@@ -7,6 +7,7 @@ Generates branded Elula Business Growth Assessment PDF reports.
 from __future__ import annotations
 
 import html
+import json
 import re
 import textwrap
 from pathlib import Path
@@ -35,6 +36,10 @@ def _display(value: Any) -> str:
 
 def _escape_pdf_text(value: Any) -> str:
     return str(value or "").replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+
+def _wrap_text(value: Any, width: int = 92) -> list[str]:
+    return textwrap.wrap(_display(value), width=width) or [PUBLIC_DATA_MISSING]
 
 
 def _wrap_lines(label: str, value: Any, width: int = 92) -> list[str]:
@@ -162,6 +167,288 @@ def _render_html(context: dict[str, Any]) -> str:
     return rendered
 
 
+def _confidence(value: str) -> str:
+    if value == "high":
+        return "High Confidence"
+    if value == "medium":
+        return "Medium Confidence"
+    return "Requires Discussion"
+
+
+def _score_label(score: int | None) -> str:
+    return "Unknown" if score is None else f"{score} / 100"
+
+
+def _rating_score(rating: float | None, review_count: int | None) -> int | None:
+    if rating is None and review_count is None:
+        return None
+
+    rating_component = round(((rating or 0) / 5) * 65) if rating is not None else 0
+    review_component = min(review_count or 0, 100) * 35 // 100
+    return min(100, rating_component + review_component)
+
+
+def _digital_presence_score(intelligence) -> int:
+    score = 0
+    if intelligence.website:
+        score += 40
+    if intelligence.phone:
+        score += 25
+    if intelligence.address:
+        score += 20
+    if intelligence.opening_hours:
+        score += 15
+    return score
+
+
+def _customer_trust_score(intelligence) -> int | None:
+    if intelligence.rating is None and intelligence.review_count is None:
+        return None
+
+    score = 0
+    if intelligence.rating is not None:
+        score += round((intelligence.rating / 5) * 60)
+    if intelligence.review_count is not None:
+        score += min(intelligence.review_count, 100) * 30 // 100
+    if intelligence.business_status:
+        score += 10
+    return min(100, score)
+
+
+def _score_reason(intelligence, category: str) -> tuple[str, str]:
+    if category == "Online Reputation":
+        if intelligence.rating is None and intelligence.review_count is None:
+            return (
+                "No public rating or review volume was available for this assessment.",
+                _confidence("discussion"),
+            )
+        return (
+            f"The public profile shows a rating of {_display(intelligence.rating)} with {_display(intelligence.review_count)} reviews.",
+            _confidence("high" if intelligence.rating is not None and intelligence.review_count is not None else "medium"),
+        )
+
+    if category == "Digital Presence":
+        present = []
+        missing = []
+        for label, value in [
+            ("website", intelligence.website),
+            ("phone number", intelligence.phone),
+            ("address", intelligence.address),
+            ("opening hours", intelligence.opening_hours),
+        ]:
+            (present if value else missing).append(label)
+        reason = f"Public information includes {', '.join(present)}."
+        if missing:
+            reason += f" Public information does not confirm {', '.join(missing)}."
+        return reason, _confidence("high" if present and not missing else "medium")
+
+    if category == "Customer Trust":
+        if intelligence.rating is None and intelligence.review_count is None:
+            return (
+                "Customer trust cannot be estimated from reviews because no public review evidence was available.",
+                _confidence("discussion"),
+            )
+        return (
+            f"Trust indicators are based on the visible rating, review volume, and business status.",
+            _confidence("high" if intelligence.rating is not None and intelligence.review_count is not None else "medium"),
+        )
+
+    if category == "Business Visibility":
+        return (
+            "Visibility is based on how complete and useful the public business profile appears to a prospective customer.",
+            _confidence("medium"),
+        )
+
+    return (
+        "Cannot be assessed from public information.",
+        _confidence("discussion"),
+    )
+
+
+def _business_health_categories(intelligence) -> list[tuple[str, int | None, str, str]]:
+    categories = [
+        ("Online Reputation", _rating_score(intelligence.rating, intelligence.review_count)),
+        ("Digital Presence", _digital_presence_score(intelligence)),
+        ("Customer Trust", _customer_trust_score(intelligence)),
+        ("Business Visibility", intelligence.profile_completeness_score),
+        ("Sales Readiness", None),
+    ]
+
+    rows = []
+    for name, score in categories:
+        reason, confidence = _score_reason(intelligence, name)
+        rows.append((name, score, reason, confidence))
+    return rows
+
+
+def _overall_reason(intelligence) -> str:
+    positive = []
+    limitation = []
+
+    if intelligence.rating is not None:
+        positive.append(f"a public rating of {_display(intelligence.rating)}")
+    if intelligence.review_count is not None:
+        positive.append(f"{_display(intelligence.review_count)} public reviews")
+    if intelligence.website:
+        positive.append("a visible website")
+    if intelligence.phone:
+        positive.append("a listed phone number")
+    if intelligence.opening_hours:
+        positive.append("published opening hours")
+
+    for label, value in [
+        ("business status", intelligence.business_status),
+        ("opening hours", intelligence.opening_hours),
+        ("website", intelligence.website),
+        ("phone number", intelligence.phone),
+    ]:
+        if not value:
+            limitation.append(label)
+
+    if positive and limitation:
+        return (
+            f"The score reflects {', '.join(positive)}. It is limited by public information that does not confirm "
+            f"{', '.join(limitation)}."
+        )
+    if positive:
+        return f"The score reflects {', '.join(positive)}."
+    return "The score is limited because the public profile does not provide enough evidence to assess the business confidently."
+
+
+def _executive_summary(intelligence, opportunities: list) -> list[str]:
+    strengths = []
+    if intelligence.rating is not None and intelligence.rating >= 4.0:
+        strengths.append("a positive public rating")
+    if intelligence.review_count is not None and intelligence.review_count >= 25:
+        strengths.append("meaningful review volume")
+    if intelligence.website:
+        strengths.append("a visible website")
+    if intelligence.phone:
+        strengths.append("clear public contact details")
+
+    strength_text = ", ".join(strengths) if strengths else "some public business information"
+    opportunity_text = (
+        "Public information suggests specific improvement areas should be reviewed."
+        if opportunities
+        else "Public information does not show a major visible gap, so the discussion should test internal sales operations."
+    )
+
+    summary = (
+        f"{intelligence.company_name or 'The business'} appears to have {strength_text}. "
+        f"{opportunity_text} This assessment cannot confirm internal enquiry handling, follow-up speed, "
+        "quotation management, sales performance reporting, or customer re-engagement without discussion. "
+        "Its value is to turn public evidence into a clear agenda for a practical business improvement conversation."
+    )
+    return _wrap_text(summary[:900], width=92)
+
+
+def _format_opening_hours(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text or text in {"{}", "[]", "null", "None"}:
+        return PUBLIC_DATA_MISSING
+
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        return text.replace("\u202f", " ").replace("\u2013", "-")
+
+    if not isinstance(data, dict):
+        return text
+
+    day_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    parts = []
+    for day in day_order:
+        hours = data.get(day)
+        if isinstance(hours, list):
+            hours_text = ", ".join(str(item) for item in hours if str(item).strip())
+        else:
+            hours_text = str(hours or "").strip()
+        if hours_text:
+            parts.append(f"{day}: {hours_text}")
+
+    return "; ".join(parts).replace("\u202f", " ").replace("\u2013", "-") or PUBLIC_DATA_MISSING
+
+
+def _business_snapshot_lines(intelligence) -> list[str]:
+    return (
+        _wrap_lines("Company", intelligence.company_name)
+        + _wrap_lines("Category", intelligence.category)
+        + _wrap_lines("Phone", intelligence.phone)
+        + _wrap_lines("Website", intelligence.website)
+        + _wrap_lines("Address", intelligence.address)
+        + _wrap_lines("Opening hours", _format_opening_hours(intelligence.opening_hours))
+    )
+
+
+def _strength_items(intelligence) -> list[dict[str, str]]:
+    strengths = []
+
+    if intelligence.rating is not None and intelligence.rating >= 4.0:
+        strengths.append(
+            {
+                "observation": f"Positive Google review rating of {_display(intelligence.rating)}.",
+                "impact": "A positive rating helps prospective customers feel more confident before they enquire.",
+                "confidence": _confidence("high"),
+            }
+        )
+
+    if intelligence.review_count is not None and intelligence.review_count >= 25:
+        strengths.append(
+            {
+                "observation": f"Visible review base with {_display(intelligence.review_count)} public reviews.",
+                "impact": "Review volume gives prospects more evidence when comparing providers.",
+                "confidence": _confidence("high"),
+            }
+        )
+
+    if intelligence.website:
+        strengths.append(
+            {
+                "observation": "Public profile includes a website.",
+                "impact": "A website gives prospects a place to validate services and submit or prepare enquiries.",
+                "confidence": _confidence("high"),
+            }
+        )
+
+    if intelligence.phone:
+        strengths.append(
+            {
+                "observation": "Public profile includes a phone number.",
+                "impact": "Clear contact details reduce friction for urgent or high-intent enquiries.",
+                "confidence": _confidence("high"),
+            }
+        )
+
+    if intelligence.opening_hours:
+        strengths.append(
+            {
+                "observation": "Opening hours are publicly visible.",
+                "impact": "Visible hours help customers understand when they can expect a response.",
+                "confidence": _confidence("medium"),
+            }
+        )
+
+    if not strengths:
+        strengths.append(
+            {
+                "observation": "The business has some public profile information available.",
+                "impact": "The available information provides a starting point for improving visibility and enquiry handling.",
+                "confidence": _confidence("medium"),
+            }
+        )
+
+    return strengths[:5]
+
+
+def _strength_lines(intelligence) -> list[str]:
+    lines = []
+    for index, strength in enumerate(_strength_items(intelligence), start=1):
+        lines.append(f"{index}. Observation: {strength['observation']}")
+        lines.extend(_wrap_lines("   Business Impact", strength["impact"], width=88))
+        lines.append(f"   Confidence: {strength['confidence']}")
+    return lines
+
+
 def _sorted_opportunities(opportunities: list) -> list:
     priority_order = {
         "High": 0,
@@ -174,37 +461,121 @@ def _sorted_opportunities(opportunities: list) -> list:
     )
 
 
-def _opportunity_lines(opportunities: list) -> list[str]:
-    if not opportunities:
-        return [
-            "No major improvement opportunity was identified from the available public data.",
-            "This does not mean there is no opportunity; it means the public data reviewed did not provide enough evidence.",
-        ]
+def _opportunity_confidence(priority: str) -> str:
+    return _confidence("high" if priority == "High" else "medium")
 
-    lines = []
-    for opportunity in _sorted_opportunities(opportunities)[:5]:
-        lines.append(f"- {opportunity.opportunity_name} ({opportunity.priority})")
-        lines.extend(_wrap_lines("  Business impact", opportunity.business_impact, width=88))
-        lines.extend(_wrap_lines("  Evidence-based recommendation", opportunity.recommended_elula_service, width=88))
+
+def _recommended_discussion(opportunity_name: str) -> str:
+    discussions = {
+        "No website detected": "Discuss how prospects currently validate the business and submit website enquiries.",
+        "Low review count": "Discuss whether satisfied customers are asked for reviews consistently.",
+        "Poor public rating": "Discuss how customer feedback is monitored and escalated.",
+        "Missing phone number": "Discuss the preferred enquiry channels and how inbound calls are tracked.",
+        "Missing opening hours": "Discuss expected response times and whether public trading hours match operations.",
+        "Weak profile completeness": "Discuss which public profile details should be corrected or expanded first.",
+        "Incomplete digital presence": "Discuss where enquiries are captured and who owns follow-up.",
+    }
+    return discussions.get(
+        opportunity_name,
+        "Discuss whether this public finding affects enquiry conversion or sales follow-up.",
+    )
+
+
+def _opportunity_lines(opportunities: list) -> list[str]:
+    lines = ["Opportunities Worth Exploring"]
+
+    if not opportunities:
+        lines.extend(
+            _wrap_text(
+                "Public information did not show a clear evidence-based external gap. The worthwhile opportunity is to confirm the internal sales process, because enquiry handling, follow-up speed, quotation management, and pipeline visibility cannot be assessed from public data.",
+                width=92,
+            )
+        )
+        lines.append("Confidence: Requires Discussion")
+        lines.append("Recommended discussion: Review how new enquiries move from first contact to appointment.")
+        return lines
+
+    for index, opportunity in enumerate(_sorted_opportunities(opportunities)[:5], start=1):
+        lines.append(f"{index}. Observation: {opportunity.opportunity_name}.")
+        lines.extend(_wrap_lines("   Why this matters", opportunity.business_impact, width=88))
+        lines.append(f"   Confidence: {_opportunity_confidence(opportunity.priority)}")
+        lines.extend(_wrap_lines("   Recommended discussion", _recommended_discussion(opportunity.opportunity_name), width=88))
 
     return lines
 
 
-def _solution_lines(top) -> list[str]:
-    if not top:
-        return [
-            "No primary Elula solution is recommended from the available public data.",
-            "A short discovery call can confirm whether there are operational or sales-process gaps not visible online.",
-        ]
-
-    return [
-        f"Primary recommendation: {top.recommended_elula_service}",
-        "Why this may help:",
-        *textwrap.wrap(
-            "The recommendation is based only on the public information available in this assessment and should be confirmed in a discovery conversation.",
-            width=92,
-        ),
+def _discussion_questions(intelligence, opportunities: list) -> list[str]:
+    questions = [
+        "How are website enquiries managed from first contact to appointment?",
+        "Who follows up missed calls and after-hours enquiries?",
+        "How quickly are quotations answered?",
+        "How do managers monitor sales pipeline performance?",
+        "How are existing customers re-engaged?",
     ]
+
+    opportunity_names = {opportunity.opportunity_name for opportunity in opportunities}
+    if "Low review count" in opportunity_names or "Poor public rating" in opportunity_names:
+        questions.append("How is customer feedback requested, tracked, and escalated?")
+    if not intelligence.opening_hours or "Missing opening hours" in opportunity_names:
+        questions.append("Do public trading hours match the actual response promise?")
+    if not intelligence.website or "No website detected" in opportunity_names:
+        questions.append("Where should prospects be sent when they want to validate services online?")
+    if not intelligence.phone or "Missing phone number" in opportunity_names:
+        questions.append("Which contact channels should be treated as primary sales channels?")
+
+    return [f"- {question}" for question in questions[:8]]
+
+
+def _next_step_lines(opportunities: list) -> list[str]:
+    lines = [
+        "1. Validate the public findings with the business owner or sales manager.",
+        "   Why: Public information can show visibility gaps, but it cannot confirm internal operations.",
+        "2. Review enquiry handling from call, website, WhatsApp, and form submission.",
+        "   Why: Response speed and ownership usually determine whether interest becomes an appointment.",
+        "3. Assess the sales process from first enquiry to quotation and follow-up.",
+        "   Why: A clear process reduces lost leads and makes performance measurable.",
+        "4. Identify automation opportunities that remove manual follow-up gaps.",
+        "   Why: Automation is useful only where it improves consistency, tracking, or response time.",
+        "5. Prioritise quick wins before larger system changes.",
+        "   Why: The fastest improvements should prove value before adding complexity.",
+    ]
+
+    top = top_opportunity(opportunities)
+    if top:
+        lines.extend(
+            [
+                "",
+                f"Possible Elula Solution: {top.recommended_elula_service}",
+                "Why supported: This is linked to a specific public evidence indicator in the assessment and should be confirmed during discovery.",
+            ]
+        )
+
+    return lines
+
+
+def _business_health_lines(intelligence) -> list[str]:
+    lines = [
+        f"Overall Business Health: {_score_label(intelligence.profile_completeness_score)}",
+        "Why this score?",
+    ]
+    lines.extend(_wrap_text(_overall_reason(intelligence), width=92))
+    lines.append("")
+
+    for category, score, reason, confidence in _business_health_categories(intelligence):
+        lines.append(category)
+        lines.append(f"Score: {_score_label(score)}")
+        lines.extend(_wrap_lines("Reason", reason, width=88))
+        lines.append(f"Confidence: {confidence}")
+        lines.append("")
+
+    return lines
+
+
+def _methodology_lines() -> list[str]:
+    return _wrap_text(
+        "This assessment is based solely on publicly available information including Google Business Profile data, publicly accessible websites and other publicly available business information. It does not assess internal systems, financial performance or confidential operational information. Its purpose is to provide an independent starting point for a business improvement discussion.",
+        width=92,
+    )
 
 
 def generate_client_report(intelligence, opportunities: list, generated_timestamp: str) -> Path:
@@ -219,9 +590,9 @@ def generate_client_report(intelligence, opportunities: list, generated_timestam
         {
             "company_name": company_name,
             "generated_timestamp": generated_timestamp,
-            "profile_summary": f"Profile completeness score: {intelligence.profile_completeness_score}/100",
+            "profile_summary": f"Overall Business Health: {intelligence.profile_completeness_score}/100",
             "digital_summary": f"Website: {_display(intelligence.website)}",
-            "top_opportunity": top.opportunity_name if top else "No major opportunity identified",
+            "top_opportunity": top.opportunity_name if top else "Internal sales process requires discussion",
             "recommended_service": top.recommended_elula_service if top else PUBLIC_DATA_MISSING,
         }
     )
@@ -232,79 +603,17 @@ def generate_client_report(intelligence, opportunities: list, generated_timestam
         "Prepared by: Elula Business Dynamics",
         f"Generated: {generated_timestamp}",
         "",
-        "This assessment is based on available public information. It is intended as a practical",
-        "conversation starter for improving enquiry capture, digital presence, and sales readiness.",
+        "This report translates public business information into an executive discussion agenda.",
     ]
 
-    lines.extend(
-        _section(
-            "Executive Summary",
-            textwrap.wrap(
-                "Based on available public information, the assessment highlights practical improvement areas that may support better customer enquiries and follow-up. It does not make assumptions about internal operations or private business performance.",
-                width=92,
-            ),
-        )
-    )
-
-    lines.extend(
-        _section(
-            "Business Snapshot",
-            _wrap_lines("Company", company_name)
-            + _wrap_lines("Category", intelligence.category)
-            + _wrap_lines("Phone", intelligence.phone)
-            + _wrap_lines("Website", intelligence.website)
-            + _wrap_lines("Address", intelligence.address),
-        )
-    )
-
-    lines.extend(
-        _section(
-            "Google Business Profile Assessment",
-            _wrap_lines("Profile completeness score", f"{intelligence.profile_completeness_score}/100")
-            + _wrap_lines("Google rating", intelligence.rating if intelligence.rating is not None else PUBLIC_DATA_MISSING)
-            + _wrap_lines("Review count", intelligence.review_count if intelligence.review_count is not None else PUBLIC_DATA_MISSING)
-            + _wrap_lines("Opening hours", intelligence.opening_hours)
-            + _wrap_lines("Business status", intelligence.business_status),
-        )
-    )
-
-    lines.extend(
-        _section(
-            "Digital Presence Assessment",
-            _wrap_lines("Website", intelligence.website)
-            + _wrap_lines("Primary contact number", intelligence.phone)
-            + textwrap.wrap(
-                "Digital presence is assessed only from public profile and website fields available to this report.",
-                width=92,
-            ),
-        )
-    )
-
-    lines.extend(
-        _section(
-            "Key Opportunities",
-            _opportunity_lines(opportunities),
-        )
-    )
-
-    lines.extend(
-        _section(
-            "Recommended Next Steps",
-            [
-                "1. Confirm the public business profile details are accurate.",
-                "2. Prioritise missing contact or enquiry-capture information.",
-                "3. Review whether follow-up automation can improve response speed.",
-                "4. Use a short discovery call to confirm which improvements are commercially useful.",
-            ],
-        )
-    )
-
-    lines.extend(
-        _section(
-            "How Elula Can Help",
-            _solution_lines(top),
-        )
-    )
+    lines.extend(_section("Executive Summary", _executive_summary(intelligence, opportunities)))
+    lines.extend(_section("Business Snapshot", _business_snapshot_lines(intelligence)))
+    lines.extend(_section("Business Health Score", _business_health_lines(intelligence)))
+    lines.extend(_section("Business Strengths", _strength_lines(intelligence)))
+    lines.extend(_section("Business Opportunities", _opportunity_lines(opportunities)))
+    lines.extend(_section("Questions Worth Discussing", _discussion_questions(intelligence, opportunities)))
+    lines.extend(_section("Recommended Next Steps", _next_step_lines(opportunities)))
+    lines.extend(_section("Assessment Methodology", _methodology_lines()))
 
     _write_simple_pdf(
         path=pdf_path,

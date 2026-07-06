@@ -36,3 +36,6 @@ archive/*.csv
 input/*.csv
 output/*.csv
 .env
+
+data/import_history.json
+Elula-Architecture-Bible/

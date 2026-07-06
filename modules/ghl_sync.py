@@ -13,6 +13,7 @@ from typing import Any
 
 from config.settings import settings
 from integrations.ghl.api import GHLAPIError, ghl
+from integrations.ghl.companies import companies
 from integrations.ghl.importer import importer
 from integrations.ghl.logger import logger
 from integrations.ghl.opportunities import opportunities
@@ -32,10 +33,14 @@ GHL_DIR = Path(__file__).resolve().parent.parent / "integrations" / "ghl"
 
 @dataclass
 class SyncSummary:
+    companies_created: int = 0
+    companies_updated: int = 0
+    company_sync_unavailable: int = 0
     contacts_created: int = 0
     contacts_updated: int = 0
     opportunities_created: int = 0
     tasks_created: int = 0
+    companies_would_upsert: int = 0
     contacts_would_upsert: int = 0
     opportunities_would_create: int = 0
     tasks_would_create: int = 0
@@ -66,10 +71,14 @@ class SyncSummary:
             )
 
         return {
+            "companies_created": self.companies_created,
+            "companies_updated": self.companies_updated,
+            "company_sync_unavailable": self.company_sync_unavailable,
             "contacts_created": self.contacts_created,
             "contacts_updated": self.contacts_updated,
             "opportunities_created": self.opportunities_created,
             "tasks_created": self.tasks_created,
+            "companies_would_upsert": self.companies_would_upsert,
             "contacts_would_upsert": self.contacts_would_upsert,
             "opportunities_would_create": self.opportunities_would_create,
             "tasks_would_create": self.tasks_would_create,
@@ -247,6 +256,20 @@ def _extract_contact_id(response: dict[str, Any]) -> str:
     raise ValueError("GHL contact response did not include a contact id.")
 
 
+def _extract_company_id(record: dict[str, Any]) -> str:
+    company_id = (
+        record.get("id")
+        or record.get("_id")
+        or record.get("companyId")
+        or record.get("businessId")
+    )
+
+    if not company_id:
+        raise ValueError("Elula BizHub company response did not include a company id.")
+
+    return str(company_id)
+
+
 def _extract_opportunity_id(response: dict[str, Any]) -> str:
     if "id" in response:
         return response["id"]
@@ -286,6 +309,49 @@ def _resolve_tags(tags_data: Any, campaign) -> list[str]:
     return tag_ids
 
 
+def _build_company_payload(
+    prospect: dict[str, Any],
+    owner_id: str,
+    campaign,
+) -> dict[str, Any]:
+    payload = {
+        "locationId": settings.ghl_location_id,
+        "name": prospect.get("company_name", ""),
+        "phone": prospect.get("phone", ""),
+        "email": prospect.get("email", ""),
+        "website": prospect.get("website", ""),
+        "address": prospect.get("address", ""),
+        "source": campaign.config.get("source", settings.default_source),
+        "assignedTo": owner_id,
+    }
+
+    custom_fields = {
+        "industry": prospect.get("category", ""),
+        "campaign_id": campaign.config.get("campaign_id", ""),
+        "campaign_name": campaign.config.get("campaign_name", getattr(campaign, "name", "")),
+        "primary_product": prospect.get("primary_product", ""),
+        "secondary_products": prospect.get("secondary_products", ""),
+        "review_rating": prospect.get("review_rating", ""),
+        "review_count": prospect.get("review_count", ""),
+        "opening_hours": prospect.get("opening_hours", ""),
+        "business_status": prospect.get("business_status", ""),
+        "opportunity_score": prospect.get("opportunity_score", ""),
+        "opportunity_reasons": prospect.get("opportunity_reasons", ""),
+    }
+
+    payload["customFields"] = [
+        {"key": key, "field_value": value}
+        for key, value in custom_fields.items()
+        if value not in ("", None)
+    ]
+
+    return {
+        key: value
+        for key, value in payload.items()
+        if value not in ("", None, [])
+    }
+
+
 def _build_contact_payload(
     prospect: dict[str, Any],
     owner_id: str,
@@ -309,6 +375,50 @@ def _build_contact_payload(
         payload["tags"] = tag_ids
 
     return {key: value for key, value in payload.items() if value not in ("", None)}
+
+
+def _has_contact_identity(prospect: dict[str, Any]) -> bool:
+    return bool(str(prospect.get("email") or "").strip() or str(prospect.get("phone") or "").strip())
+
+
+def _sync_company_if_available(
+    prospect: dict[str, Any],
+    owner_id: str,
+    campaign,
+    summary: SyncSummary,
+) -> str | None:
+    company_payload = _build_company_payload(prospect, owner_id, campaign)
+
+    try:
+        company_record, company_created = companies.sync_company(company_payload)
+    except GHLAPIError as exc:
+        summary.company_sync_unavailable += 1
+        logger.warning(
+            "Company sync unavailable for prospect '%s'. Elula BizHub returned: %s. "
+            "Continuing with contact, opportunity, and task sync where contact data exists.",
+            prospect.get("company_name", "Unknown"),
+            exc,
+        )
+        return None
+
+    company_id = _extract_company_id(company_record)
+
+    if company_created:
+        summary.companies_created += 1
+        logger.info(
+            "Company created for prospect '%s': %s.",
+            prospect.get("company_name", "Unknown"),
+            company_id,
+        )
+    else:
+        summary.companies_updated += 1
+        logger.info(
+            "Company updated for prospect '%s': %s.",
+            prospect.get("company_name", "Unknown"),
+            company_id,
+        )
+
+    return company_id
 
 
 def _opportunity_name(prospect: dict[str, Any]) -> str:
@@ -382,6 +492,32 @@ def _sync_single_prospect(
 
     tag_ids = _resolve_tags(metadata["tags"], campaign)
 
+    company_id = _sync_company_if_available(
+        prospect=prospect,
+        owner_id=owner_id,
+        campaign=campaign,
+        summary=summary,
+    )
+
+    if not _has_contact_identity(prospect):
+        if not company_id:
+            raise ValueError(
+                "Prospect has no phone or email and company sync is unavailable, "
+                "so no Elula BizHub record can be created safely."
+            )
+
+        logger.info(
+            "Company synced for prospect '%s', but contact, opportunity, and task were skipped "
+            "because no phone or email is available.",
+            prospect.get("company_name", "Unknown"),
+        )
+        return {
+            "company_id": company_id,
+            "contact_id": None,
+            "opportunity_id": None,
+            "task_id": None,
+        }
+
     contact_payload = _build_contact_payload(prospect, owner_id, tag_ids, campaign)
     existing_contact = importer.find_contact(
         email=contact_payload.get("email"),
@@ -393,8 +529,10 @@ def _sync_single_prospect(
 
     if existing_contact:
         summary.contacts_updated += 1
+        logger.info("Contact updated for prospect '%s': %s.", prospect.get("company_name", "Unknown"), contact_id)
     else:
         summary.contacts_created += 1
+        logger.info("Contact created for prospect '%s': %s.", prospect.get("company_name", "Unknown"), contact_id)
 
     opportunity_response = opportunities.create_opportunity(
         contact_id=contact_id,
@@ -405,6 +543,7 @@ def _sync_single_prospect(
     )
     opportunity_id = _extract_opportunity_id(opportunity_response)
     summary.opportunities_created += 1
+    logger.info("Opportunity created for prospect '%s': %s.", prospect.get("company_name", "Unknown"), opportunity_id)
 
     task_response = task_service.create_initial_call(
         contact_id=contact_id,
@@ -412,8 +551,10 @@ def _sync_single_prospect(
     )
     task_id = _extract_task_id(task_response)
     summary.tasks_created += 1
+    logger.info("Task created for prospect '%s': %s.", prospect.get("company_name", "Unknown"), task_id)
 
     return {
+        "company_id": company_id,
         "contact_id": contact_id,
         "opportunity_id": opportunity_id,
         "task_id": task_id,
@@ -436,16 +577,24 @@ def _dry_run_single_prospect(
     owner_id = _record_id(owner, "owner")
 
     tag_ids = _resolve_tags(metadata["tags"], campaign)
+    _build_company_payload(prospect, owner_id, campaign)
     _build_contact_payload(prospect, owner_id, tag_ids, campaign)
 
-    summary.contacts_would_upsert += 1
-    summary.opportunities_would_create += 1
-    summary.tasks_would_create += 1
+    summary.companies_would_upsert += 1
+
+    if _has_contact_identity(prospect):
+        summary.contacts_would_upsert += 1
+        summary.opportunities_would_create += 1
+        summary.tasks_would_create += 1
+
     summary.import_history_would_record += 1
 
     logger.info(
-        "DRY RUN: Would upsert contact, create opportunity in pipeline '%s', "
-        "create initial task, and record import history for prospect '%s'.",
+        "DRY RUN: Would upsert company%s in pipeline '%s' and record import history "
+        "for prospect '%s'.",
+        ", upsert contact, create opportunity, and create initial task"
+        if _has_contact_identity(prospect)
+        else "; contact, opportunity, and task would be skipped because no phone or email is available",
         pipeline_id,
         prospect.get("company_name", "Unknown"),
     )
@@ -538,10 +687,11 @@ def sync_prospects(
             summary.imported += 1
 
             logger.info(
-                "Imported prospect '%s' using %s match '%s'. Contact: %s, opportunity: %s.",
+                "Imported prospect '%s' using %s match '%s'. Company: %s, contact: %s, opportunity: %s.",
                 company_name,
                 match_type,
                 match_value,
+                sync_result["company_id"],
                 sync_result["contact_id"],
                 sync_result["opportunity_id"],
             )
